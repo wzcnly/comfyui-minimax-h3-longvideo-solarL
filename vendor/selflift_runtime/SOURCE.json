@@ -1,0 +1,14 @@
+{
+  "source": "https://github.com/facok/comfyui-SelfLift",
+  "source_type": "user-installed local snapshot",
+  "captured": "2026-10-14",
+  "license": "No LICENSE file found in installed source; no redistribution license is asserted.",
+  "files": {
+    "diagnostics.py": "99a43869b99f83eaedf15285e5c62ddad5a529eae417a02c47034b3139140803",
+    "h3_tiling.py": "9ab139a147469831e893cdc594f37091fcb96c494528367eb88b786de5e004d7",
+    "h3_tst.py": "36b9d8498b0717d32c0aad80c3f99689866882f6b08029040e8f6cf79a00ba26",
+    "h3_upscaler.py": "76468960e2a29129dfe0a75f825bfa446c22c07c82e567baee83c9738afe9909",
+    "nodes.py": "8e326c5fa676803efdfb9a961372ebc1422f5360349fa33a7ba6c20333760846",
+    "selflift.py": "5ea815d2b7ae8fc3c857f8cd34cc12d7006ae98f15e691882d75dcfe28a1c409"
+  }
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "file": "vendor/apt_motion.py",
+    "source": "https://github.com/cardenluo/ComfyUI-Apt_Preset",
+    "source_file": "NodeBasic/minimaxH3.py",
+    "sha256": "28729201a965f45a8775da67a55c39612af241d5c488f07e37840ad93335d927",
+    "license": "licenses/apt_motion.py.LICENSE",
+    "snapshot_date": "2026-10-13"
+  },
+  {
+    "file": "vendor/upscale_3d.py",
+    "source": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler",
+    "source_file": "nodes/minimax_h3_latent_upscaler_3d.py",
+    "sha256": "1b727ff696b9bf4f45fb79229eb2aae26e46d64365bed01c76a8670b273b746c",
+    "license": "licenses/upscale_3d.py.LICENSE",
+    "snapshot_date": "2026-10-13"
+  }
+]
