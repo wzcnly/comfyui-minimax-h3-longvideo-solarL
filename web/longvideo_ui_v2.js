@@ -151,15 +151,19 @@ app.registerExtension({
             if (this._solarLCanonicalWidgets) {
                 this.widgets.splice(0,this.widgets.length,...this._solarLCanonicalWidgets);
             }
-            if (nodeData.name === 'MiniMaxH3SelfLiftLongVideoSampler-solarL' && args[0]?.widgets_values?.length === 16) {
+            const savedValues = args[0]?.widgets_values;
+            const isLegacySelfLiftLayout = nodeData.name === 'MiniMaxH3SelfLiftLongVideoSampler-solarL'
+                && savedValues?.length === 16
+                && ['official_image_guide','motion_context'].includes(savedValues[6])
+                && typeof savedValues[7] === 'string'
+                && typeof savedValues[8] === 'number';
+            if (isLegacySelfLiftLayout) {
                 const oldNames = ['seed','control_after_generate','cfg_1','target_frames','segment_frames',
                     'overlap_frames','continuation_mode','prompt','transition_step','lowres_scale','rho',
                     'w_min','w_max','upscaler_model','highres_tiling','upscaler_unload'];
-                const previous = new Map(oldNames.map((name,i)=>[name,args[0].widgets_values[i]]));
-                // Old 6/8 low-step defaults belong to per-segment generation, not refinement.
-                previous.set('transition_step',1);
-                previous.set('lowres_scale',0);
-                previous.set('enable_second_pass',false);
+                const previous = new Map(oldNames.map((name,i)=>[name,savedValues[i]]));
+                // Preserve the legacy workflow's actual SelfLift settings while mapping
+                // its prompt-before-controls layout back to the backend widget order.
                 args[0] = {...args[0], widgets_values:this.widgets.map(w=>previous.has(w.name) ? previous.get(w.name) : w.value)};
             }
             const result = configure?.apply(this,args);

@@ -47,21 +47,26 @@ MiniMax H3 长视频内部循环采样、整片增强及参考素材载入节点
 
 高分辨率分块用于降低整片增强的临时显存需求：`tile_count=0`自动选择1至8块，手动支持1至64块；`tile_overlap`是每块每侧的扩展像素，默认128，相邻块共享约256像素。分块数量受空间网格限制，更多块通常增加计算量，不能保证任意长度不爆显存。
 
-## SelfLift整片增强 Sampler
+## SelfLift分段低分辨率→整段高分辨率 Sampler
 
 节点：**MiniMax H3 长视频循环 Sampler · SelfLift · solarL**。
 
-处理顺序同样为：**标准分段一采 → 拼接完整 latent → 一次整片 SelfLift 提升分辨率和增强 → 输出**，保留一采音频。
+处理顺序为：**同一条Sigma序列的低分辨率前段按片段循环 → 拼接各段边界状态 → 整段执行一次SelfLift升分辨率 → 用Sigma剩余段对完整视频采样 → 输出**。低分辨率阶段按片段逐段运行；高分辨率阶段对拼接后的完整视频运行一次。音频沿同一条Sigma序列完成对应阶段采样。
 
-一采使用 `sampler_1` 和 `sigmas_1`。增强使用独立 `sampler_2` 和低噪声 `sigmas_2`，`sampler_2`必须为标准Euler，增强至少2步。
+节点只接一个 `sampler` 和一条完整 `sigmas`，采样器必须为标准Euler。不要在节点外拆分Sigma或再串联一个普通Sampler。总采样步数等于输入Sigma序列的步数：`transition_step` 指定低分辨率阶段使用的前几步，剩余步骤用于完整视频的高分辨率阶段，不会额外增加一轮采样。
 
-- `transition_step`：增强的低分辨率步数，必须小于增强总步数；2步增强可先设为1。
-- `lowres_scale=0`：自动尽量匹配拼接一采尺寸；非0时使用指定比例。
-- `rho=0`：需选择放大模型；选择`none`时rho必须大于0。
-- `model_2`：增强低分辨率阶段的模型；`model_hires`可单独指定目标分辨率阶段模型。
-- `highres_tiling`：增强目标分辨率阶段自动选择1至8个空间块，无手动块数和重叠参数。
+- `transition_step`：每段低分辨率阶段的步数；必须小于Sigma总步数，并至少留一步给高分辨率阶段。示例工作流使用8步Sigma，前6步分段，剩余2步整段采样。
 
-SelfLift增强会进行带噪采样，可能改变一采结果；空间分块保留完整时间轴，低分辨率阶段不分块。关闭增强只输出标准一采拼接结果。
+节点默认值：`transition_step=6`、`lowres_scale=0.5`、`rho=0`、`w_min=0.5`、`w_max=1.0`、`highres_tiling=关闭`、`upscaler_unload=开启`。示例工作流开启了高分辨率分块。
+
+- `lowres_scale=0.5`：低分辨率阶段相对输入LATENT宽高的比例；升分辨率后恢复到输入LATENT尺寸。
+- `upscaler_model`：SelfLift潜变量放大模型；默认使用 `minimax_h3_latent_upscaler_3d_fp16.safetensors`。模型需放在 `models/latent_upscale_models` 或ComfyUI已注册的额外模型目录。选择 `none` 时必须设置 `rho>0`。
+- `rho=0`：使用放大模型时跳过像素VAE锚点修正；此时 `w_min` 和 `w_max` 不参与计算。设置 `rho>0` 时才启用锚点修正，并由 `w_min`、`w_max` 控制修正权重范围。
+- `model_hires`：可选的整段高分辨率阶段模型；未连接时沿用 `model`。
+- `highres_tiling`：开启后在高分辨率阶段使用SelfLift自动空间分块以降低显存需求；它不切分时间轴。
+- `upscaler_unload`：放大完成后卸载放大器，默认开启以释放显存。
+
+SelfLift版没有独立的输出放大模式或倍率。最终宽高由输入LATENT决定；若需要更大输出尺寸，请在上游生成对应尺寸的H3 LATENT。
 
 ## 参考图像载入
 
@@ -87,7 +92,7 @@ SelfLift增强会进行带噪采样，可能改变一采结果；空间分块保
 
 ## 输出和测试
 
-普通Sampler输出images、audio、fps、frame_count、last_first_pass_latent、report、output、denoised_output。`last_first_pass_latent`仅为最后一段一采，`output`为整片latent。`denoised_output`为最后一步x0；采样器未提供x0时回退到output。SelfLift版提供前七项，不提供denoised_output。
+普通Sampler和SelfLift版均输出images、audio、fps、frame_count、last_first_pass_latent、report、output、denoised_output。普通版的`last_first_pass_latent`是最后一段一采；SelfLift版是最后一段低分辨率阶段的边界x0。`output`为整片latent，`denoised_output`为最后一步x0。
 
 整片latent可能包含H3网格补齐尾帧，附带frame_count和fps；外部解码后需按frame_count裁剪。本节点images和audio已裁到实际长度。
 
@@ -96,7 +101,9 @@ SelfLift增强会进行带噪采样，可能改变一采结果；空间分块保
 样例位于 `examples/`，仅保留两个流程：
 
 - `2080ti_内部循环_终版1.json`：标准版终版流程。
-- `2080ti_内部循环_终版1_SelfLift.json`：基于同一终版流程，保留模型、素材和一采设置，使用独立Euler进行整片SelfLift增强，默认开启增强和自动分块。
+- `2080ti_内部循环_终版1_SelfLift.json`：单Euler、单8步Sigma；默认前6步按段低分辨率采样、拼接后用剩余2步对完整视频做高分辨率采样，并开启SelfLift空间分块。
+
+新版已修正SelfLift工作流的控件顺序恢复，并兼容旧版提示词位于参数前的工作流。升级插件后如仍看到放大器空白、参数错位或NaN，请在ComfyUI页面按Ctrl+F5刷新前端，再重新载入工作流；不需要手动重排参数。
 
 先验证一采接续，再打开增强和分块。逻辑、界面模拟和小视频载入检查不代替完整GPU画质与显存测试。
 

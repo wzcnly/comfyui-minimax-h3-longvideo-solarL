@@ -1,8 +1,8 @@
 {
   "id": "ad982fe8-35aa-4ef5-b91b-af3691764202",
   "revision": 7,
-  "last_node_id": 6625,
-  "last_link_id": 351,
+  "last_node_id": 6626,
+  "last_link_id": 355,
   "nodes": [
     {
       "id": 583,
@@ -148,7 +148,7 @@
       "flags": {
         "pinned": true
       },
-      "order": 15,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
@@ -559,7 +559,7 @@
         26
       ],
       "flags": {},
-      "order": 12,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -840,7 +840,7 @@
         88.22802734375
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
@@ -1010,8 +1010,7 @@
           "type": "MODEL",
           "links": [
             282,
-            283,
-            315
+            283
           ]
         }
       ],
@@ -1055,7 +1054,7 @@
         490
       ],
       "flags": {},
-      "order": 4,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -1115,7 +1114,7 @@
         86
       ],
       "flags": {},
-      "order": 5,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -1140,6 +1139,7 @@
           ]
         }
       ],
+      "title": "SelfLift统一采样器 · Euler",
       "properties": {
         "Node name for S&R": "KSamplerSelect",
         "cnr_id": "comfy-core",
@@ -1152,10 +1152,10 @@
         }
       },
       "widgets_values": [
-        "er_sde"
+        "euler"
       ],
       "widgets_values_named": {
-        "sampler_name": "er_sde"
+        "sampler_name": "euler"
       },
       "color": "#223",
       "bgcolor": "#335"
@@ -1172,7 +1172,7 @@
         370
       ],
       "flags": {},
-      "order": 6,
+      "order": 5,
       "mode": 4,
       "inputs": [
         {
@@ -1238,117 +1238,6 @@
       "bgcolor": "#533"
     },
     {
-      "id": 6303,
-      "type": "SaveVideo",
-      "pos": [
-        8798.34964972882,
-        79.34382919437614
-      ],
-      "size": [
-        314,
-        150
-      ],
-      "flags": {},
-      "order": 27,
-      "mode": 0,
-      "inputs": [
-        {
-          "label": "video",
-          "localized_name": "视频",
-          "name": "video",
-          "type": "VIDEO",
-          "link": 123
-        },
-        {
-          "label": "filename_prefix",
-          "localized_name": "文件名前缀",
-          "name": "filename_prefix",
-          "type": "STRING",
-          "widget": {
-            "name": "filename_prefix"
-          },
-          "link": null
-        },
-        {
-          "label": "format",
-          "localized_name": "格式",
-          "name": "format",
-          "type": "COMFY_DYNAMICCOMBO_V3",
-          "widget": {
-            "name": "format"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "编解码器",
-          "name": "format.codec",
-          "type": "COMFY_DYNAMICCOMBO_V3",
-          "widget": {
-            "name": "format.codec"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "encoding",
-          "name": "format.codec.encoding",
-          "shape": 7,
-          "type": "COMFY_DYNAMICCOMBO_V3",
-          "widget": {
-            "name": "format.codec.encoding"
-          },
-          "link": null
-        },
-        {
-          "label": "codec",
-          "localized_name": "编码器",
-          "name": "codec",
-          "shape": 7,
-          "type": "COMFY_DYNAMICCOMBO_V3",
-          "widget": {
-            "name": "codec"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "label": "video_url",
-          "localized_name": "video",
-          "name": "video",
-          "type": "VIDEO",
-          "links": null
-        },
-        {
-          "label": "video",
-          "localized_name": "video",
-          "name": "video",
-          "type": "VIDEO",
-          "links": null
-        }
-      ],
-      "title": "FINAL SAVE VIDEO",
-      "properties": {
-        "Node name for S&R": "SaveVideo",
-        "cnr_id": "comfy-core",
-        "ver": "0.37.4",
-        "widget_ue_connectable": {}
-      },
-      "widgets_values": [
-        "H3_动作迁移",
-        "mp4",
-        "h264",
-        "auto",
-        "auto"
-      ],
-      "widgets_values_named": {
-        "filename_prefix": "H3_动作迁移",
-        "format": "mp4",
-        "format.codec": "h264",
-        "format.codec.encoding": "auto",
-        "codec": "auto"
-      }
-    },
-    {
       "id": 6409,
       "type": "BasicScheduler",
       "pos": [
@@ -1408,7 +1297,6 @@
           "name": "SIGMAS",
           "type": "SIGMAS",
           "links": [
-            35,
             319
           ]
         }
@@ -1426,121 +1314,16 @@
       },
       "widgets_values": [
         "simple",
-        6,
+        8,
         1
       ],
       "widgets_values_named": {
         "scheduler": "simple",
-        "steps": 6,
+        "steps": 8,
         "denoise": 1
       },
       "color": "#223",
       "bgcolor": "#335"
-    },
-    {
-      "id": 6300,
-      "type": "CreateVideo",
-      "pos": [
-        8447.027615219567,
-        -112.58163936861878
-      ],
-      "size": [
-        300,
-        150
-      ],
-      "flags": {},
-      "order": 26,
-      "mode": 0,
-      "inputs": [
-        {
-          "label": "images",
-          "localized_name": "图像",
-          "name": "images",
-          "type": "IMAGE",
-          "link": 266
-        },
-        {
-          "label": "audio",
-          "localized_name": "音频",
-          "name": "audio",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": 267
-        },
-        {
-          "label": "fps",
-          "localized_name": "帧率",
-          "name": "fps",
-          "type": "FLOAT",
-          "widget": {
-            "name": "fps"
-          },
-          "link": 268
-        },
-        {
-          "label": "bit_depth",
-          "localized_name": "bit_depth",
-          "name": "bit_depth",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "bit_depth"
-          },
-          "link": null
-        },
-        {
-          "label": "color_space",
-          "localized_name": "color_space",
-          "name": "color_space",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "color_space"
-          },
-          "link": null
-        },
-        {
-          "label": "codec",
-          "localized_name": "codec",
-          "name": "codec",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "codec"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "label": "VIDEO",
-          "localized_name": "视频",
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            123
-          ]
-        }
-      ],
-      "title": "FINAL CREATE VIDEO · 24 FPS",
-      "properties": {
-        "Node name for S&R": "CreateVideo",
-        "cnr_id": "comfy-core",
-        "ver": "0.37.4",
-        "widget_ue_connectable": {}
-      },
-      "widgets_values": [
-        24,
-        "auto",
-        "sRGB",
-        "none"
-      ],
-      "widgets_values_named": {
-        "fps": 24,
-        "bit_depth": "auto",
-        "color_space": "sRGB",
-        "codec": "none"
-      }
     },
     {
       "id": 6560,
@@ -1554,7 +1337,7 @@
         298
       ],
       "flags": {},
-      "order": 14,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
@@ -1689,495 +1472,6 @@
       "bgcolor": "#335"
     },
     {
-      "id": 6609,
-      "type": "BasicScheduler",
-      "pos": [
-        7576.45125491495,
-        376.08153300412715
-      ],
-      "size": [
-        225,
-        142
-      ],
-      "flags": {},
-      "order": 23,
-      "mode": 4,
-      "inputs": [
-        {
-          "label": "model",
-          "localized_name": "模型",
-          "name": "model",
-          "type": "MODEL",
-          "link": 315
-        },
-        {
-          "label": "scheduler",
-          "localized_name": "调度器",
-          "name": "scheduler",
-          "type": "COMBO",
-          "widget": {
-            "name": "scheduler"
-          },
-          "link": null
-        },
-        {
-          "label": "steps",
-          "localized_name": "步数",
-          "name": "steps",
-          "type": "INT",
-          "widget": {
-            "name": "steps"
-          },
-          "link": null
-        },
-        {
-          "label": "denoise",
-          "localized_name": "降噪",
-          "name": "denoise",
-          "type": "FLOAT",
-          "widget": {
-            "name": "denoise"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "label": "SIGMAS",
-          "localized_name": "Sigmas",
-          "name": "SIGMAS",
-          "type": "SIGMAS",
-          "links": [
-            320
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "BasicScheduler",
-        "cnr_id": "comfy-core",
-        "ver": "0.33.0",
-        "widget_ue_connectable": {},
-        "ttNbgOverride": {
-          "bgcolor": "#335",
-          "groupcolor": "#88A",
-          "color": "#223"
-        }
-      },
-      "widgets_values": [
-        "simple",
-        2,
-        0.2
-      ],
-      "widgets_values_named": {
-        "scheduler": "simple",
-        "steps": 2,
-        "denoise": 0.2
-      },
-      "color": "#223",
-      "bgcolor": "#335"
-    },
-    {
-      "id": 6600,
-      "type": "MiniMaxH3SelfLiftLongVideoSampler-solarL",
-      "pos": [
-        7915.900302332499,
-        -272.64834656075465
-      ],
-      "size": [
-        440,
-        1208
-      ],
-      "flags": {},
-      "order": 25,
-      "mode": 0,
-      "inputs": [
-        {
-          "localized_name": "model",
-          "name": "model",
-          "type": "MODEL",
-          "link": 283
-        },
-        {
-          "localized_name": "positive",
-          "name": "positive",
-          "type": "CONDITIONING",
-          "link": 254
-        },
-        {
-          "localized_name": "latent",
-          "name": "latent",
-          "type": "LATENT",
-          "link": 255
-        },
-        {
-          "localized_name": "vae",
-          "name": "vae",
-          "type": "VAE",
-          "link": 300
-        },
-        {
-          "localized_name": "audio_vae",
-          "name": "audio_vae",
-          "type": "VAE",
-          "link": 302
-        },
-        {
-          "localized_name": "sampler_1",
-          "name": "sampler_1",
-          "type": "SAMPLER",
-          "link": 258
-        },
-        {
-          "localized_name": "sigmas_1",
-          "name": "sigmas_1",
-          "type": "SIGMAS",
-          "link": 319
-        },
-        {
-          "localized_name": "negative",
-          "name": "negative",
-          "shape": 7,
-          "type": "CONDITIONING",
-          "link": null
-        },
-        {
-          "localized_name": "model_2",
-          "name": "model_2",
-          "shape": 7,
-          "type": "MODEL",
-          "link": null
-        },
-        {
-          "localized_name": "sampler_2",
-          "name": "sampler_2",
-          "shape": 7,
-          "type": "SAMPLER",
-          "link": 321
-        },
-        {
-          "localized_name": "sigmas_2",
-          "name": "sigmas_2",
-          "shape": 7,
-          "type": "SIGMAS",
-          "link": 320
-        },
-        {
-          "localized_name": "clip",
-          "name": "clip",
-          "shape": 7,
-          "type": "CLIP",
-          "link": 298
-        },
-        {
-          "localized_name": "seed",
-          "name": "seed",
-          "type": "INT",
-          "widget": {
-            "name": "seed"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "cfg_1",
-          "name": "cfg_1",
-          "type": "FLOAT",
-          "widget": {
-            "name": "cfg_1"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "target_frames",
-          "name": "target_frames",
-          "type": "INT",
-          "widget": {
-            "name": "target_frames"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "segment_frames",
-          "name": "segment_frames",
-          "type": "INT",
-          "widget": {
-            "name": "segment_frames"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "overlap_frames",
-          "name": "overlap_frames",
-          "type": "COMBO",
-          "widget": {
-            "name": "overlap_frames"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "continuation_mode",
-          "name": "continuation_mode",
-          "type": "COMBO",
-          "widget": {
-            "name": "continuation_mode"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "enable_second_pass",
-          "name": "enable_second_pass",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "enable_second_pass"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "upscaler_model",
-          "name": "upscaler_model",
-          "type": "COMBO",
-          "widget": {
-            "name": "upscaler_model"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "upscale_factor",
-          "name": "upscale_factor",
-          "type": "FLOAT",
-          "widget": {
-            "name": "upscale_factor"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "cfg_2",
-          "name": "cfg_2",
-          "type": "FLOAT",
-          "widget": {
-            "name": "cfg_2"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "highres_tiling",
-          "name": "highres_tiling",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "highres_tiling"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "prompt",
-          "name": "prompt",
-          "shape": 7,
-          "type": "STRING",
-          "widget": {
-            "name": "prompt"
-          },
-          "link": 263
-        },
-        {
-          "localized_name": "upscale_mode",
-          "name": "upscale_mode",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "upscale_mode"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "upscale_width",
-          "name": "upscale_width",
-          "shape": 7,
-          "type": "INT",
-          "widget": {
-            "name": "upscale_width"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "upscale_height",
-          "name": "upscale_height",
-          "shape": 7,
-          "type": "INT",
-          "widget": {
-            "name": "upscale_height"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "upscale_megapixels",
-          "name": "upscale_megapixels",
-          "shape": 7,
-          "type": "FLOAT",
-          "widget": {
-            "name": "upscale_megapixels"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "ref_image_0",
-          "name": "ref_image_0",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 348
-        },
-        {
-          "localized_name": "ref_image_1",
-          "name": "ref_image_1",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 350
-        },
-        {
-          "localized_name": "ref_image_2",
-          "name": "ref_image_2",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "localized_name": "ref_video_0",
-          "name": "ref_video_0",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": 341
-        },
-        {
-          "localized_name": "ref_video_1",
-          "name": "ref_video_1",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "localized_name": "ref_video_audio_0",
-          "name": "ref_video_audio_0",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": 343
-        },
-        {
-          "localized_name": "ref_video_audio_1",
-          "name": "ref_video_audio_1",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": null
-        },
-        {
-          "localized_name": "ref_audio_0",
-          "name": "ref_audio_0",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "images",
-          "name": "images",
-          "type": "IMAGE",
-          "links": [
-            266
-          ]
-        },
-        {
-          "localized_name": "audio",
-          "name": "audio",
-          "type": "AUDIO",
-          "links": [
-            267
-          ]
-        },
-        {
-          "localized_name": "fps",
-          "name": "fps",
-          "type": "FLOAT",
-          "links": [
-            268
-          ]
-        },
-        {
-          "localized_name": "frame_count",
-          "name": "frame_count",
-          "type": "INT",
-          "links": null
-        },
-        {
-          "localized_name": "last_first_pass_latent",
-          "name": "last_first_pass_latent",
-          "type": "LATENT",
-          "links": null
-        },
-        {
-          "localized_name": "report",
-          "name": "report",
-          "type": "STRING",
-          "links": null
-        },
-        {
-          "localized_name": "output",
-          "name": "output",
-          "type": "LATENT",
-          "links": null
-        }
-      ],
-      "title": "MiniMax H3 · 标准一采拼接→整片SelfLift增强 · solarL",
-      "properties": {
-        "Node name for S&R": "MiniMaxH3LongVideoSampler-solarL"
-      },
-      "widgets_values": [
-        100622192187985,
-        "randomize",
-        1,
-        0,
-        124,
-        22,
-        "official_image_guide",
-        true,
-        "minimax_h3_latent_upscaler_3d_fp16.safetensors",
-        1.5,
-        1,
-        true,
-        "",
-        "scale by multiplier",
-        1280,
-        704,
-        1,
-        1,
-        0.0,
-        0.0,
-        0.5,
-        1.0,
-        true
-      ],
-      "widgets_values_named": {
-        "seed": 100622192187985,
-        "control_after_generate": "randomize",
-        "cfg_1": 1,
-        "target_frames": 0,
-        "segment_frames": 124,
-        "overlap_frames": 22,
-        "continuation_mode": "official_image_guide",
-        "prompt": "",
-        "enable_second_pass": false,
-        "upscaler_model": "minimax_h3_latent_upscaler_3d_fp16.safetensors",
-        "upscale_device": "cuda",
-        "upscale_precision": "fp32",
-        "upscale_mode": "scale by multiplier",
-        "upscale_factor": 1.5,
-        "upscale_width": 1280,
-        "upscale_height": 704,
-        "upscale_megapixels": 1,
-        "cfg_2": 1,
-        "highres_tiling": false,
-        "tile_count": 0,
-        "tile_overlap": 128
-      }
-    },
-    {
       "id": 6622,
       "type": "SolarLReferenceImageLoad",
       "pos": [
@@ -2189,7 +1483,7 @@
         410
       ],
       "flags": {},
-      "order": 7,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -2296,7 +1590,7 @@
         410
       ],
       "flags": {},
-      "order": 8,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -2403,7 +1697,7 @@
         150
       ],
       "flags": {},
-      "order": 9,
+      "order": 8,
       "mode": 0,
       "showAdvanced": false,
       "inputs": [
@@ -2535,6 +1829,430 @@
       "widgets_values_named": {}
     },
     {
+      "id": 6559,
+      "type": "MiniMaxH3FP16LoaderStar7",
+      "pos": [
+        5072.799487743603,
+        -1491.6038423343562
+      ],
+      "size": [
+        544.1904653578719,
+        81.59977837295537
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "unet_name",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            249
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3FP16LoaderStar7",
+        "aux_id": "star7code/minimax-h3-fp16-exact-star7",
+        "ver": "2a57ff5af7249516a75860486b3d17c1a3ee6bbf",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
+        }
+      },
+      "widgets_values": [
+        "MiniMax-H3\\minimax_h3_hybrid_fl2va_ref2va_b25-49-int8.safetensors"
+      ],
+      "widgets_values_named": {
+        "unet_name": "MiniMax-H3\\minimax_h3_hybrid_fl2va_ref2va_b25-49-int8.safetensors"
+      },
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 6600,
+      "type": "MiniMaxH3SelfLiftLongVideoSampler-solarL",
+      "pos": [
+        7920.780588006328,
+        -246.29452868844018
+      ],
+      "size": [
+        440,
+        1048
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 283
+        },
+        {
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 254
+        },
+        {
+          "localized_name": "latent",
+          "name": "latent",
+          "type": "LATENT",
+          "link": 255
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 300
+        },
+        {
+          "localized_name": "audio_vae",
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 302
+        },
+        {
+          "localized_name": "sampler",
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 258
+        },
+        {
+          "localized_name": "sigmas",
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 319
+        },
+        {
+          "localized_name": "negative",
+          "name": "negative",
+          "shape": 7,
+          "type": "CONDITIONING",
+          "link": null
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 298
+        },
+        {
+          "localized_name": "model_hires",
+          "name": "model_hires",
+          "shape": 7,
+          "type": "MODEL",
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "target_frames",
+          "name": "target_frames",
+          "type": "INT",
+          "widget": {
+            "name": "target_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "segment_frames",
+          "name": "segment_frames",
+          "type": "INT",
+          "widget": {
+            "name": "segment_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "overlap_frames",
+          "name": "overlap_frames",
+          "type": "COMBO",
+          "widget": {
+            "name": "overlap_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "continuation_mode",
+          "name": "continuation_mode",
+          "type": "COMBO",
+          "widget": {
+            "name": "continuation_mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "transition_step",
+          "name": "transition_step",
+          "type": "INT",
+          "widget": {
+            "name": "transition_step"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lowres_scale",
+          "name": "lowres_scale",
+          "type": "FLOAT",
+          "widget": {
+            "name": "lowres_scale"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "rho",
+          "name": "rho",
+          "type": "FLOAT",
+          "widget": {
+            "name": "rho"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "w_min",
+          "name": "w_min",
+          "type": "FLOAT",
+          "widget": {
+            "name": "w_min"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "w_max",
+          "name": "w_max",
+          "type": "FLOAT",
+          "widget": {
+            "name": "w_max"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "upscaler_model",
+          "name": "upscaler_model",
+          "type": "COMBO",
+          "widget": {
+            "name": "upscaler_model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 263
+        },
+        {
+          "localized_name": "highres_tiling",
+          "name": "highres_tiling",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "highres_tiling"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "upscaler_unload",
+          "name": "upscaler_unload",
+          "shape": 7,
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "upscaler_unload"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "ref_image_0",
+          "name": "ref_image_0",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 348
+        },
+        {
+          "localized_name": "ref_image_1",
+          "name": "ref_image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 350
+        },
+        {
+          "localized_name": "ref_image_2",
+          "name": "ref_image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "ref_video_0",
+          "name": "ref_video_0",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 341
+        },
+        {
+          "localized_name": "ref_video_1",
+          "name": "ref_video_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "ref_video_audio_0",
+          "name": "ref_video_audio_0",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 343
+        },
+        {
+          "localized_name": "ref_video_audio_1",
+          "name": "ref_video_audio_1",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "localized_name": "ref_audio_0",
+          "name": "ref_audio_0",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            352
+          ]
+        },
+        {
+          "localized_name": "audio",
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            353
+          ]
+        },
+        {
+          "localized_name": "fps",
+          "name": "fps",
+          "type": "FLOAT",
+          "links": [
+            354
+          ]
+        },
+        {
+          "localized_name": "frame_count",
+          "name": "frame_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "last_first_pass_latent",
+          "name": "last_first_pass_latent",
+          "type": "LATENT",
+          "links": null
+        },
+        {
+          "localized_name": "report",
+          "name": "report",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "output",
+          "name": "output",
+          "type": "LATENT",
+          "links": null
+        },
+        {
+          "localized_name": "denoised_output",
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null
+        }
+      ],
+      "title": "MiniMax H3 · SelfLift低分辨率分段→整段高分辨率 · solarL",
+      "properties": {
+        "Node name for S&R": "MiniMaxH3LongVideoSampler-solarL"
+      },
+      "widgets_values": [
+        875930666625212,
+        "randomize",
+        1,
+        0,
+        124,
+        22,
+        "official_image_guide",
+        6,
+        0.5,
+        0,
+        0.5,
+        1,
+        "minimax_h3_latent_upscaler_3d_fp16.safetensors",
+        "",
+        true,
+        true
+      ],
+      "widgets_values_named": {
+        "seed": 875930666625212,
+        "control_after_generate": "randomize",
+        "cfg": 1,
+        "target_frames": 0,
+        "segment_frames": 124,
+        "overlap_frames": 22,
+        "continuation_mode": "official_image_guide",
+        "prompt": "",
+        "upscaler_model": "minimax_h3_latent_upscaler_3d_fp16.safetensors",
+        "transition_step": 6,
+        "lowres_scale": 0.5,
+        "rho": 0,
+        "w_min": 0.5,
+        "w_max": 1,
+        "highres_tiling": true,
+        "upscaler_unload": true
+      }
+    },
+    {
       "id": 6621,
       "type": "VHS_LoadVideo-solarL",
       "pos": [
@@ -2543,7 +2261,7 @@
       ],
       "size": [
         291.1490234375,
-        854.2650527559963
+        830.2650527559963
       ],
       "flags": {},
       "order": 10,
@@ -2710,9 +2428,9 @@
         "frame_load_cap": 0,
         "skip_first_frames": 0,
         "select_every_nth": 1,
-        "size_mode": "custom",
+        "size_mode": "longest_edge",
         "max_long_edge": 736,
-        "align_17n5": false,
+        "align_17n5": true,
         "format": "AnimateDiff",
         "videopreview": {
           "hidden": false,
@@ -2738,9 +2456,9 @@
         "frame_load_cap": 0,
         "skip_first_frames": 0,
         "select_every_nth": 1,
-        "size_mode": "custom",
+        "size_mode": "longest_edge",
         "max_long_edge": 736,
-        "align_17n5": false,
+        "align_17n5": true,
         "format": "AnimateDiff",
         "choose video to upload": null,
         "videopreview": {
@@ -2761,214 +2479,211 @@
       }
     },
     {
-      "id": 6410,
-      "type": "H3SigmaRefiner",
+      "id": 6626,
+      "type": "CreateVideo",
       "pos": [
-        7569.875060774361,
-        15.871976327459207
+        8453.552932453485,
+        -156.23005259800652
       ],
       "size": [
-        229.62301635742188,
-        140.52825927734375
+        270,
+        150
       ],
       "flags": {},
       "order": 24,
-      "mode": 4,
+      "mode": 0,
       "inputs": [
         {
-          "label": "sigmas",
-          "localized_name": "sigmas",
-          "name": "sigmas",
-          "type": "SIGMAS",
-          "link": 35
+          "localized_name": "图像",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 352
         },
         {
-          "label": "extra_steps",
-          "localized_name": "extra_steps",
-          "name": "extra_steps",
-          "type": "INT",
-          "widget": {
-            "name": "extra_steps"
-          },
-          "link": null
+          "localized_name": "音频",
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 353
         },
         {
-          "label": "start_at_sigma",
-          "localized_name": "start_at_sigma",
-          "name": "start_at_sigma",
+          "localized_name": "帧率",
+          "name": "fps",
           "type": "FLOAT",
           "widget": {
-            "name": "start_at_sigma"
+            "name": "fps"
           },
-          "link": null
+          "link": 354
         },
         {
-          "label": "end_at_sigma",
-          "localized_name": "end_at_sigma",
-          "name": "end_at_sigma",
-          "type": "FLOAT",
-          "widget": {
-            "name": "end_at_sigma"
-          },
-          "link": null
-        },
-        {
-          "label": "spacing",
-          "localized_name": "spacing",
-          "name": "spacing",
+          "localized_name": "bit_depth",
+          "name": "bit_depth",
+          "shape": 7,
           "type": "COMBO",
           "widget": {
-            "name": "spacing"
+            "name": "bit_depth"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "color_space",
+          "name": "color_space",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "color_space"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "codec",
+          "name": "codec",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "codec"
           },
           "link": null
         }
       ],
       "outputs": [
         {
-          "label": "sigmas",
-          "localized_name": "sigmas",
-          "name": "sigmas",
-          "type": "SIGMAS",
+          "localized_name": "视频",
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            355
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CreateVideo",
+        "cnr_id": "comfy-core",
+        "ver": "0.33.0"
+      },
+      "widgets_values": [
+        24,
+        8,
+        "sRGB",
+        "none"
+      ],
+      "widgets_values_named": {
+        "fps": 24,
+        "bit_depth": 8,
+        "color_space": "sRGB",
+        "codec": "none"
+      }
+    },
+    {
+      "id": 6303,
+      "type": "SaveVideo",
+      "pos": [
+        8773.342869821594,
+        -155.3961449572352
+      ],
+      "size": [
+        314,
+        704.5833333333334
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "video",
+          "localized_name": "视频",
+          "name": "video",
+          "type": "VIDEO",
+          "link": 355
+        },
+        {
+          "label": "filename_prefix",
+          "localized_name": "文件名前缀",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "label": "format",
+          "localized_name": "格式",
+          "name": "format",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "编解码器",
+          "name": "format.codec",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format.codec"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "encoding",
+          "name": "format.codec.encoding",
+          "shape": 7,
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "format.codec.encoding"
+          },
+          "link": null
+        },
+        {
+          "label": "codec",
+          "localized_name": "编码器",
+          "name": "codec",
+          "shape": 7,
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "codec"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "video_url",
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
+          "links": null
+        },
+        {
+          "label": "video",
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
           "links": null
         }
       ],
+      "title": "FINAL SAVE VIDEO",
       "properties": {
-        "Node name for S&R": "H3SigmaRefiner",
-        "aux_id": "yichengup/ComfyUI-YCNodes-MiniMax-H3",
-        "ver": "146207295c1d2bd6b64a6552484cb6ed8be1c9ef",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.2"
-        },
+        "Node name for S&R": "SaveVideo",
+        "cnr_id": "comfy-core",
+        "ver": "0.37.4",
         "widget_ue_connectable": {}
       },
       "widgets_values": [
-        1,
-        0.7,
-        0,
-        "cosine"
+        "H3_动作迁移",
+        "mp4",
+        "h264",
+        "auto",
+        "auto"
       ],
       "widgets_values_named": {
-        "extra_steps": 1,
-        "start_at_sigma": 0.7,
-        "end_at_sigma": 0,
-        "spacing": "cosine"
-      },
-      "color": "#233",
-      "bgcolor": "#355"
-    },
-    {
-      "id": 6559,
-      "type": "MiniMaxH3FP16LoaderStar7",
-      "pos": [
-        5072.799487743603,
-        -1491.6038423343562
-      ],
-      "size": [
-        544.1904653578719,
-        81.59977837295537
-      ],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [
-        {
-          "localized_name": "unet_name",
-          "name": "unet_name",
-          "type": "COMBO",
-          "widget": {
-            "name": "unet_name"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "model",
-          "name": "model",
-          "type": "MODEL",
-          "links": [
-            249
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "MiniMaxH3FP16LoaderStar7",
-        "aux_id": "star7code/minimax-h3-fp16-exact-star7",
-        "ver": "2a57ff5af7249516a75860486b3d17c1a3ee6bbf",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.5.2"
-        }
-      },
-      "widgets_values": [
-        "MiniMax-H3\\minimax_h3_hybrid_fl2va_ref2va_b25-49-int8.safetensors"
-      ],
-      "widgets_values_named": {
-        "unet_name": "MiniMax-H3\\minimax_h3_hybrid_fl2va_ref2va_b25-49-int8.safetensors"
-      },
-      "color": "#223",
-      "bgcolor": "#335"
-    },
-    {
-      "id": 6625,
-      "type": "KSamplerSelect",
-      "pos": [
-        7579.470078060543,
-        386.90708676098654
-      ],
-      "size": [
-        225,
-        86
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [
-        {
-          "label": "sampler_name",
-          "localized_name": "采样器名称",
-          "name": "sampler_name",
-          "type": "COMBO",
-          "widget": {
-            "name": "sampler_name"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "label": "SAMPLER",
-          "localized_name": "采样器",
-          "name": "SAMPLER",
-          "type": "SAMPLER",
-          "links": [
-            321
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "KSamplerSelect",
-        "cnr_id": "comfy-core",
-        "ver": "0.33.0",
-        "widget_ue_connectable": {},
-        "ttNbgOverride": {
-          "bgcolor": "#335",
-          "groupcolor": "#88A",
-          "color": "#223"
-        }
-      },
-      "widgets_values": [
-        "euler"
-      ],
-      "widgets_values_named": {
-        "sampler_name": "er_sde"
-      },
-      "color": "#223",
-      "bgcolor": "#335",
-      "title": "SelfLift整片增强 · 标准Euler"
+        "filename_prefix": "H3_动作迁移",
+        "format": "mp4",
+        "format.codec": "h264",
+        "format.codec.encoding": "auto",
+        "codec": "auto"
+      }
     }
   ],
   "links": [
@@ -3011,22 +2726,6 @@
       261,
       12,
       "STRING"
-    ],
-    [
-      35,
-      6409,
-      0,
-      6410,
-      0,
-      "SIGMAS"
-    ],
-    [
-      123,
-      6300,
-      0,
-      6303,
-      0,
-      "VIDEO"
     ],
     [
       215,
@@ -3089,32 +2788,8 @@
       6489,
       0,
       6600,
-      23,
+      22,
       "STRING"
-    ],
-    [
-      266,
-      6600,
-      0,
-      6300,
-      0,
-      "IMAGE"
-    ],
-    [
-      267,
-      6600,
-      1,
-      6300,
-      1,
-      "AUDIO"
-    ],
-    [
-      268,
-      6600,
-      2,
-      6300,
-      2,
-      "FLOAT"
     ],
     [
       276,
@@ -3169,7 +2844,7 @@
       582,
       0,
       6600,
-      11,
+      8,
       "CLIP"
     ],
     [
@@ -3213,14 +2888,6 @@
       "CLIP"
     ],
     [
-      315,
-      6538,
-      0,
-      6609,
-      0,
-      "MODEL"
-    ],
-    [
       319,
       6409,
       0,
@@ -3229,27 +2896,11 @@
       "SIGMAS"
     ],
     [
-      320,
-      6609,
-      0,
-      6600,
-      10,
-      "SIGMAS"
-    ],
-    [
-      321,
-      6625,
-      0,
-      6600,
-      9,
-      "SAMPLER"
-    ],
-    [
       341,
       6621,
       0,
       6600,
-      31,
+      28,
       "IMAGE"
     ],
     [
@@ -3265,7 +2916,7 @@
       6621,
       2,
       6600,
-      33,
+      30,
       "AUDIO"
     ],
     [
@@ -3305,7 +2956,7 @@
       6622,
       0,
       6600,
-      28,
+      25,
       "IMAGE"
     ],
     [
@@ -3321,18 +2972,50 @@
       6623,
       0,
       6600,
-      29,
+      26,
       "IMAGE"
+    ],
+    [
+      352,
+      6600,
+      0,
+      6626,
+      0,
+      "IMAGE"
+    ],
+    [
+      353,
+      6600,
+      1,
+      6626,
+      1,
+      "AUDIO"
+    ],
+    [
+      354,
+      6600,
+      2,
+      6626,
+      2,
+      "FLOAT"
+    ],
+    [
+      355,
+      6626,
+      0,
+      6303,
+      0,
+      "VIDEO"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.5644739300537779,
+      "scale": 0.7513148009015777,
       "offset": [
-        -4350.188745882812,
-        1922.8785768476507
+        -6182.76415352282,
+        511.8984440212315
       ]
     },
     "frontendVersion": "1.23.0",

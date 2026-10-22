@@ -99,3 +99,36 @@ layoutNode.onSerialize(info);
 assert.deepEqual(info.widgets_values,canonical.map((_,i)=>i));
 layoutNode.configure({widgets_values:canonical.map((_,i)=>i+100)});
 for (const w of layoutNode.widgets) assert.equal(w.value,canonical.indexOf(w.name)+100);
+
+class SelfLiftLayoutNode {
+    constructor() {
+        this.inputs=[];
+        this.widgets=['seed','control_after_generate','cfg','target_frames','segment_frames',
+            'overlap_frames','continuation_mode','transition_step','lowres_scale','rho','w_min',
+            'w_max','upscaler_model','prompt','highres_tiling','upscaler_unload']
+            .map(name=>({name,value:null,type:'number'}));
+    }
+    configure(info) { this.widgets.forEach((w,i)=>w.value=info.widgets_values[i]); }
+    setDirtyCanvas() {}
+}
+app.extension.beforeRegisterNodeDef(SelfLiftLayoutNode,{name:'MiniMaxH3SelfLiftLongVideoSampler-solarL'});
+const selfLiftNode=new SelfLiftLayoutNode();
+const currentValues=[123,'randomize',1,0,124,22,'official_image_guide',6,0.5,0,0.5,1,
+    'minimax_h3_latent_upscaler_3d_fp16.safetensors','',true,true];
+selfLiftNode.configure({widgets_values:currentValues});
+assert.equal(selfLiftNode.widgets.find(w=>w.name==='transition_step').value,6);
+assert.equal(selfLiftNode.widgets.find(w=>w.name==='lowres_scale').value,0.5);
+assert.equal(selfLiftNode.widgets.find(w=>w.name==='rho').value,0);
+assert.equal(selfLiftNode.widgets.find(w=>w.name==='w_min').value,0.5);
+assert.equal(selfLiftNode.widgets.find(w=>w.name==='w_max').value,1);
+assert.equal(selfLiftNode.widgets.find(w=>w.name==='upscaler_model').value,
+    'minimax_h3_latent_upscaler_3d_fp16.safetensors');
+const legacyValues=[123,'randomize',1,0,124,22,'official_image_guide','',6,0.5,0,0.5,1,
+    'minimax_h3_latent_upscaler_3d_fp16.safetensors',true,true];
+const migratedNode=new SelfLiftLayoutNode();
+migratedNode.configure({widgets_values:legacyValues});
+assert.equal(migratedNode.widgets.find(w=>w.name==='transition_step').value,6);
+assert.equal(migratedNode.widgets.find(w=>w.name==='lowres_scale').value,0.5);
+assert.equal(migratedNode.widgets.find(w=>w.name==='upscaler_model').value,
+    'minimax_h3_latent_upscaler_3d_fp16.safetensors');
+console.log('SelfLift widget checks passed: current layout stays positional; legacy prompt-first layout migrates by names.');
