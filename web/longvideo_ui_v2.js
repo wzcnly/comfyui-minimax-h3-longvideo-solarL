@@ -6,7 +6,8 @@ const groups = [
 ];
 const aliases = { source_video: ['ref_video', 0], depth_video: ['ref_video', 1],
     source_audio: ['ref_video_audio', 0] };
-const connected = (input) => input?.link != null;
+const connected = (node, input) => input != null
+    && node.isInputConnected(node.inputs.indexOf(input));
 function referenceSlot(name) {
     if (aliases[name]) return aliases[name];
     for (const [prefix, , limit] of groups) {
@@ -23,10 +24,10 @@ export function reconcileReferences(node) {
         // Migrate linked legacy names in place, preserving their actual link IDs.
         for (const [oldName, [prefix, index]] of Object.entries(aliases)) {
             const old = node.inputs?.find(i => i.name === oldName);
-            if (!old || !connected(old)) continue;
+            if (!old || !connected(node, old)) continue;
             const name = `${prefix}_${index}`;
             const current = node.inputs.find(i => i.name === name);
-            if (connected(current)) {
+            if (connected(node, current)) {
                 // Never discard a second connected cable; backend reports the conflict.
                 old.label = `${name}（重复连接，请保留一路）`;
                 continue;
@@ -37,16 +38,16 @@ export function reconcileReferences(node) {
         }
         for (let i = (node.inputs?.length ?? 0) - 1; i >= 0; i--) {
             const input = node.inputs[i];
-            if (aliases[input.name] && !connected(input)) node.removeInput(i);
+            if (aliases[input.name] && !connected(node, input)) node.removeInput(i);
         }
         for (const [prefix, type, limit] of groups) {
-            const linked = (node.inputs ?? []).filter(i => connected(i) && referenceSlot(i.name)?.[0] === prefix);
+            const linked = (node.inputs ?? []).filter(i => connected(node, i) && referenceSlot(i.name)?.[0] === prefix);
             const highest = Math.max(-1, ...linked.map(i => referenceSlot(i.name)[1]));
             const visible = Math.min(limit, highest + 2);
             for (let i = node.inputs.length - 1; i >= 0; i--) {
                 const input = node.inputs[i];
                 const slot = referenceSlot(input.name);
-                if (!slot || slot[0] !== prefix || connected(input)) continue;
+                if (!slot || slot[0] !== prefix || connected(node, input)) continue;
                 const legacy = linked.some(p => aliases[p.name]?.[0] === prefix && aliases[p.name][1] === slot[1]);
                 if (slot[1] >= visible || legacy) node.removeInput(i);
             }
@@ -58,19 +59,8 @@ export function reconcileReferences(node) {
                 if (!present) node.addInput(`${prefix}_${i}`, type);
             }
         }
-        const rank = (input) => {
-            const slot = referenceSlot(input.name);
-            return slot ? groups.findIndex(g => g[0] === slot[0]) * 10 + slot[1] : -1;
-        };
-        const ordered = [...node.inputs.filter(i => !referenceSlot(i.name)),
-            ...node.inputs.filter(i => referenceSlot(i.name)).sort((a,b) => rank(a) - rank(b))];
-        node.inputs.splice(0, node.inputs.length, ...ordered);
-        node.inputs.forEach((input, index) => {
-            if (!connected(input)) return;
-            const link = node.graph?._links?.get?.(input.link)
-                ?? node.graph?.links?.get?.(input.link) ?? node.graph?.links?.[input.link];
-            if (link) link.target_slot = index;
-        });
+        // Keep surviving sockets in place. addInput/removeInput own link indices;
+        // raw sorting breaks frontends whose link IDs are derived from slot indices.
         node.setDirtyCanvas?.(true, true);
     } finally { node._solarLReconciling = false; }
 }
@@ -103,7 +93,7 @@ export function updateModeWidgets(node) {
     for (const widget of node.widgets ?? []) {
         if (!(widget.name in active)) continue;
         // Widgets converted to linked inputs already have their own visibility handling.
-        if (node.inputs?.some(i => i.widget?.name === widget.name && connected(i))) continue;
+        if (node.inputs?.some(i => i.widget?.name === widget.name && connected(node, i))) continue;
         if (!widget._solarLOriginal) widget._solarLOriginal = {
             type: widget.type, computeSize: widget.computeSize, hidden: widget.hidden,
             draw: widget.draw,

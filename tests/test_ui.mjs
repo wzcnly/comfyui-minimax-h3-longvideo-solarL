@@ -13,7 +13,14 @@ class Node {
             .map(name=>({name,type:'number',value:name==='upscale_mode'?'scale by multiplier':1,computeSize:()=>[100,20]}));
     }
     addInput(name,type) { this.inputs.push({name,type,link:null}); this.onConnectionsChange?.(); }
-    removeInput(index) { assert.equal(this.inputs[index].link,null); this.inputs.splice(index,1); this.onConnectionsChange?.(); }
+    removeInput(index) {
+        assert.equal(this.inputs[index].link,null);
+        this.inputs.splice(index,1);
+        for (const link of this.graph._links.values()) if (link.target_slot > index) link.target_slot--;
+        this.onConnectionsChange?.();
+    }
+    disconnect(name) { const input=this.inputs.find(i=>i.name===name); this.graph._links.delete(input.link); input.link=null; }
+    isInputConnected(index) { return [...this.graph._links.values()].some(l=>l.target_slot===index); }
     setDirtyCanvas() {}
     link(name,id) { const input=this.inputs.find(i=>i.name===name); assert.ok(input,name); input.link=id; this.graph._links.set(id,{target_slot:this.inputs.indexOf(input)}); }
 }
@@ -25,11 +32,11 @@ for (let i=0;i<9;i++) {
     assert.equal(node.inputs.filter(p=>p.name.startsWith('ref_image_')).length,Math.min(9,i+2));
 }
 for (const input of node.inputs.filter(i=>i.link!=null)) assert.equal(node.graph._links.get(input.link).target_slot,node.inputs.indexOf(input));
-node.inputs.find(i=>i.name==='ref_image_8').link=null; reconcileReferences(node);
+node.disconnect('ref_image_8'); reconcileReferences(node);
 assert.equal(node.inputs.filter(i=>i.name.startsWith('ref_image_')).length,9);
-node.inputs.find(i=>i.name==='ref_image_7').link=null; reconcileReferences(node);
+node.disconnect('ref_image_7'); reconcileReferences(node);
 assert.equal(node.inputs.filter(i=>i.name.startsWith('ref_image_')).length,8);
-node.inputs.find(i=>i.name==='ref_image_0').link=null; reconcileReferences(node);
+node.disconnect('ref_image_0'); reconcileReferences(node);
 assert.ok(node.inputs.find(i=>i.name==='ref_image_0')); // gaps preserve later connected IDs
 const restored=new Node(); restored.inputs=JSON.parse(JSON.stringify(node.inputs)); restored.graph=node.graph;
 reconcileReferences(restored); assert.deepEqual(restored.inputs,node.inputs);
