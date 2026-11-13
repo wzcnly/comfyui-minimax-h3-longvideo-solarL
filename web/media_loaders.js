@@ -1,9 +1,24 @@
 import { app } from '/scripts/app.js';
 
+export function installVHSLoaderAlias(vhs) {
+    if (vhs._solarLLoaderAlias) return;
+    const register=vhs.beforeRegisterNodeDef;
+    // Let ComfyUI invoke VHS once, including its common and video-specific hooks.
+    vhs.beforeRegisterNodeDef=function(nodeType,nodeData,...args) {
+        if (nodeData.name==='VHS_LoadVideo-solarL') nodeData={...nodeData,name:'VHS_LoadVideo'};
+        return register?.call(this,nodeType,nodeData,...args);
+    };
+    vhs._solarLLoaderAlias=true;
+}
+
 function visible(widget, show) {
     if (!widget) return;
+    if (widget._solarLMediaVisible===show) return;
+    widget._solarLMediaVisible=show;
     widget._solarLMediaOriginal ||= {type:widget.type,computeSize:widget.computeSize,draw:widget.draw};
     const saved=widget._solarLMediaOriginal;
+    // Hidden widgets are omitted from layout, but their input slots still use y.
+    if (!Number.isFinite(widget.y)) widget.y=0;
     widget.hidden=!show;
     widget.options ||= {};
     widget.options.hidden=!show;
@@ -12,6 +27,27 @@ function visible(widget, show) {
     widget.computeSize=show?saved.computeSize:()=>[0,-4];
     widget.draw=show?saved.draw:()=>{};
     if (widget._state) {widget._state.hidden=!show;widget._state.type=widget.type;}
+}
+
+export function findVisibleInputByType(node,type) {
+    const types=value=>String(value??'*').toLowerCase().split(',');
+    const wanted=types(type);
+    let occupied,wildcardFree,wildcardOccupied;
+    for (const [index,slot] of (node.inputs??[]).entries()) {
+        const widget=node.widgets?.find(w=>w.name===slot.widget?.name);
+        if (widget?.hidden) continue;
+        const available=slot.link==null || !!node.graph?.getLink(slot.link)?._dragging;
+        const offered=types(slot.type);
+        const result={index,slot};
+        if (wanted.some(t=>offered.includes(t))) {
+            if (available) return result;
+            occupied??=result;
+        } else if (wanted.includes('*') || offered.includes('*')) {
+            if (available) wildcardFree??=result;
+            else wildcardOccupied??=result;
+        }
+    }
+    return wildcardFree??occupied??wildcardOccupied;
 }
 
 export function updateLoaderWidgets(node) {
@@ -54,6 +90,11 @@ export function installManualPlayback(node) {
     // VHS's canvas drag handlers preventDefault on preview pointer events.
     // Intercept only this video before they run, preserving native control actions.
     const pointer=event=>{
+        // A link dragged from another node can end over the video overlay.
+        // Let the canvas finish that gesture before handling native video controls.
+        const canvas=app.canvas;
+        if (canvas?.linkConnector?.isConnecting || canvas?.connecting_links?.length ||
+            canvas?.pointer?.isDown || canvas?.pointer?.eDown) return;
         if (event.composedPath().includes(video)) event.stopPropagation();
     };
     for (const name of ['pointerdown','pointerup','pointermove','mousedown','mouseup','click']) {
@@ -72,20 +113,26 @@ export function installManualPlayback(node) {
 
 app.registerExtension({
     name:'solarL.H3.MediaLoaders',
+    async init() {
+        await import('/extensions/ComfyUI-VideoHelperSuite/js/VHS.core.js');
+        const vhs=app.extensions.find(e=>e.name==='VideoHelperSuite.Core');
+        if (!vhs) throw new Error('solarL video loader: VHS frontend extension unavailable');
+        installVHSLoaderAlias(vhs);
+    },
     async beforeRegisterNodeDef(nodeType,nodeData) {
         const isVideo=nodeData.name==='VHS_LoadVideo-solarL';
         if (!isVideo && nodeData.name!=='SolarLReferenceImageLoad') return;
         if (isVideo) {
-            // Reuse VHS's upload, preview, load-format and VAE output UI intact.
-            await import('/extensions/ComfyUI-VideoHelperSuite/js/VHS.core.js');
-            const vhs=app.extensions.find(e=>e.name==='VideoHelperSuite.Core');
-            if (!vhs) throw new Error('solarL video loader: VHS frontend extension unavailable');
-            await vhs.beforeRegisterNodeDef?.(nodeType,{...nodeData,name:'VHS_LoadVideo'});
+            // Canvas hover/drop must not snap to a widget excluded from layout.
+            nodeType.prototype.findInputByType=function(type) {
+                return findVisibleInputByType(this,type);
+            };
         }
         for (const hook of ['onNodeCreated','onConfigure','onWidgetChanged']) {
             const previous=nodeType.prototype[hook];
             nodeType.prototype[hook]=function(...args) {
                 const result=previous?.apply(this,args);
+                if (hook==='onWidgetChanged' && !['size_mode','调整比例'].includes(args[0])) return result;
                 queueMicrotask(()=>{
                     if (isVideo) installManualPlayback(this);
                     updateLoaderWidgets(this);

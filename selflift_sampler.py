@@ -4,7 +4,8 @@ import time
 
 import torch
 
-from .planning import plan_segments, segment_length
+from .planning import plan_segments, segment_length, parse_segment_schedule
+from .segment_cache import cached_sample, workflow_identity, exclusive_task
 from .sampler import (
     SolarLH3LongVideoSampler, ReferenceVAECache, decode_video, join_av_latents,
     motion_class, reference_inputs, resize_guides, sample_once, slice_audio,
@@ -43,6 +44,7 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
     def INPUT_TYPES(cls):
         schema = super(SolarLH3SelfLiftLongVideoSampler, cls).INPUT_TYPES()
         required, optional = schema["required"], schema["optional"]
+        optional.pop('second_pass_mode', None)
         for old in ("sampler_1", "sigmas_1", "enable_second_pass", "cfg_1", "cfg_2"):
             required.pop(old, None)
         required["sampler"] = ("SAMPLER", {"tooltip": "SelfLift 全阶段使用同一个采样器；必须选标准 Euler。"})
@@ -118,6 +120,8 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
             optional.pop("tile_overlap", None)
         for group in schema.values():
             for name, definition in list(group.items()):
+                if isinstance(definition, str):
+                    continue
                 if name in ("sampler", "sigmas"):
                     continue
                 base = dict(definition[1]) if len(definition) > 1 else {}
@@ -126,6 +130,7 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
         return schema
 
     @torch.inference_mode()
+    @exclusive_task
     def run(self, model, positive, latent, vae, audio_vae, sampler, sigmas, cfg,
             seed, target_frames, segment_frames, overlap_frames,
             continuation_mode, upscaler_model="none",
@@ -133,7 +138,7 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
             rho=0.0, w_min=0.5, w_max=1.0, upscaler_unload=True,
             model_hires=None, negative=None,
             source_video=None, source_audio=None, depth_video=None, clip=None, prompt="",
-            ref_image_0=None, ref_image_1=None, ref_image_2=None, ref_image_3=None,
+            ref_image_0=None, ref_image_1=None, ref_image_2=None, ref_image_3=None, segment_plan=None, cache_directory='', cache_prompt=None, cache_node_id=None,
             **extra_references):
         from comfy_extras import nodes_minimax_h3 as h3
         from comfy_extras.nodes_audio import vae_decode_audio
@@ -168,16 +173,35 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
         width, height = base_w * 16, base_h * 16
         total = int(target_frames or (len(source_video) if source_video is not None else
                     sum(h3.FRAME_PER_TOKEN[k % 5] for k in range(streams[0].shape[2]))))
+        schedule = None
+        if segment_plan is not None:
+            if segment_plan.get('version') != 1:
+                raise ValueError('不兼容的分段计划')
+            overlap_frames = int(segment_plan['overlap_frames'])
+            schedule = parse_segment_schedule(segment_plan['segments'], overlap_frames, segment_plan.get('default_prompt', ''))
+            total = sum(row['frames'] for row in schedule)
         if source_video is not None and total > len(source_video):
             raise ValueError("target_frames超过Video 1的实际帧数")
         for name, frames in videos.items():
             if total > len(frames):
                 raise ValueError(f"{name}帧数不足以覆盖目标时间轴")
-        plan = plan_segments(total, int(segment_frames), int(overlap_frames))
+        if schedule is None:
+            plan = plan_segments(total, int(segment_frames), int(overlap_frames))
+        else:
+            plan, cursor = [], 0
+            for index, row in enumerate(schedule):
+                trim = overlap_frames if index else 0
+                plan.append((cursor-trim, trim))
+                cursor += row['frames']
         refs = positive[0][1].get("minimax_refs", [])
         if any(data.get("minimax_keyframes") for _, data in positive):
             raise ValueError("请连接干净的Reference to Video条件；外部首尾Guide不能用于分段低分辨率采样")
         rebuild = source_video is not None or bool(ref_audios) or (bool(pictures) and clip is not None and bool(prompt.strip()))
+        if schedule is not None and any(row['prompt'] for row in schedule):
+            if clip is None or not all(row['prompt'].strip() for row in schedule):
+                raise ValueError('逐段提示词需要CLIP和每段非空提示词')
+            prompt = segment_plan.get('default_prompt', '') or schedule[0]['prompt']
+            rebuild = True
         if len(plan) > 1 and any(ref.get("kind") in ("video", "video_audio", "audio") for ref in refs) and not rebuild:
             raise ValueError("多段参考视频需额外连接原始参考视频、CLIP、prompt和参考图片，以便按段重建条件")
         if rebuild:
@@ -197,6 +221,8 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
         reference_vae = ReferenceVAECache(vae)
         video_parts, audio_parts, reports = [], [], []
         previous_clean, previous_tail = None, None
+        cache_identity = workflow_identity(cache_prompt, cache_node_id,
+            ['model', 'sampler', 'vae', 'audio_vae', 'clip', 'positive', 'negative']) if cache_directory else None
         started = time.perf_counter()
         LOG.info("[solarL SelfLift] schedule=%s transition_step=%d low=%dx%d target=%dx%d segments=%d",
                  sigmas.tolist(), transition_step, low_w, low_h, target_w, target_h, len(plan))
@@ -204,14 +230,15 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
         for index, (start, trim) in enumerate(plan):
             mm.throw_exception_if_processing_interrupted()
             tick = time.perf_counter()
-            length = segment_length(total, start, int(segment_frames))
+            length = (segment_length(total, start, int(segment_frames)) if schedule is None else
+                      h3.align_frame_count(max(22, schedule[index]['frames'] + trim)))
             current, _ = h3._empty_av_latent(low_w * 16, low_h * 16, length)
             cond = positive
             if rebuild:
                 seg_videos = {name: slice_images(frames, start, length) for name, frames in videos.items()}
                 seg_audio = {name: slice_audio(sound, start, length) for name, sound in video_audios.items()}
                 cond, current = h3.MiniMaxH3ReferenceToVideo.execute(
-                    clip=clip, prompt=prompt, width=low_w * 16, height=low_h * 16, length=length,
+                    clip=clip, prompt=(schedule[index]['prompt'] if schedule is not None and schedule[index]['prompt'] else prompt), width=low_w * 16, height=low_h * 16, length=length,
                     ref_image_size="max", vae=reference_vae, audio_vae=audio_vae,
                     ref_images=pictures, ref_videos=seg_videos,
                     ref_video_audios=seg_audio, ref_audios=ref_audios)[:2]
@@ -227,8 +254,12 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
                     cond = h3.MiniMaxH3AddGuide.execute(cond, current, 0, vae=vae,
                                                        image=previous_tail)[0]
             neg = negative if negative is not None else _zero_negative(cond)
-            low = sample_once(model, cond, neg, current, sampler,
-                              sigmas[:int(transition_step) + 1], (int(seed) + index) % 2**64, cfg)
+            low, cache_hit = cached_sample(cache_directory, sample_once, model=model,
+                cond=cond, negative=neg, latent=current, sampler=sampler,
+                sigmas=sigmas[:int(transition_step) + 1], seed=(int(seed)+index)%2**64,
+                cfg=cfg, stage='selflift-boundary-v2', identity=cache_identity, index=index,
+                details={'start':start, 'trim':trim, 'length':length, 'transition_step':transition_step,
+                         'lineage':schedule[:index+1] if schedule else plan[:index+1]})
             clean = low.get("_denoised_samples")
             if clean is None:
                 raise RuntimeError("SelfLift低分辨率阶段未返回边界x0")
@@ -239,7 +270,7 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
             boundary_audio = low["samples"].tensors[1]
             trim_tokens = h3.video_latent_t(trim) if trim else 0
             video_parts.append(low_video[:, :, trim_tokens:].cpu().clone())
-            take = min(length - trim, total - (start + trim))
+            take = min(length - trim, total - (start + trim)) if schedule is None else schedule[index]['frames']
             audio_start = round((start + trim) * 40 / 24)
             audio_end = round((start + trim + take) * 40 / 24)
             audio_parts.append((audio_start, audio_end,
@@ -252,7 +283,7 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
             if motion is None and index + 1 < len(plan):
                 decoded = decode_video(vae, low_video)
                 previous_tail = decoded[-int(overlap_frames):].clone()
-            reports.append(f"low_segment {index + 1}/{len(plan)} start={start} generated={length} trim={trim} "
+            reports.append(f"low_segment {index + 1}/{len(plan)} cache_hit={int(cache_hit)} start={start} generated={length} trim={trim} "
                            f"output={take} elapsed={time.perf_counter() - tick:.2f}s")
             LOG.info("[solarL SelfLift] %s", reports[-1])
 
@@ -323,28 +354,37 @@ class SolarLH3SelfLiftLongVideoSampler(SolarLH3LongVideoSampler):
         LOG.info("[solarL SelfLift] global high-resolution suffix starts sigma=%.6g steps=%d",
                  float(sigma_next), high_steps)
         high_started = time.perf_counter()
-        output_samples = comfy.samplers.sample(
-            high_model, resume_noise, high_cond, high_neg, cfg, high_model.load_device,
-            sampler, sigmas[int(transition_step):], high_model.model_options,
-            latent_image=resume_latent_samples, callback=callback,
-            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=int(seed))
-        if high_evaluations != high_steps:
+        def high_sample(model_arg, cond_arg, neg_arg, latent_arg, sampler_arg, sigmas_arg, seed_arg, cfg_arg):
+            result = comfy.samplers.sample(
+                model_arg, resume_noise, cond_arg, neg_arg, cfg_arg, model_arg.load_device,
+                sampler_arg, sigmas_arg, model_arg.model_options,
+                latent_image=latent_arg['samples'], callback=callback,
+                disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=seed_arg)
+            captured = x0_capture.get('value')
+            if captured is None:
+                clean_result = result
+            else:
+                if result.is_nested and not captured.is_nested:
+                    captured = comfy.nested_tensor.NestedTensor(comfy.utils.unpack_latents(captured, [z.shape for z in result.unbind()]))
+                clean_result = model_arg.model.process_latent_out(captured.cpu())
+            return {'samples':result, '_denoised_samples':clean_result}
+        high_identity = workflow_identity(cache_prompt, cache_node_id,
+            ['model', 'model_hires', 'sampler', 'vae', 'audio_vae', 'clip', 'positive', 'negative']) if cache_directory else None
+        high_result, high_hit = cached_sample(cache_directory, high_sample, model=high_model,
+            cond=high_cond, negative=high_neg, latent={'samples':resume_latent_samples}, sampler=sampler,
+            sigmas=sigmas[int(transition_step):], seed=int(seed), cfg=cfg,
+            stage='selflift-high-v2', identity=high_identity)
+        output_samples = high_result['samples']
+        if not high_hit and high_evaluations != high_steps:
             raise RuntimeError(f"SelfLift高分辨率阶段预计{high_steps}步，实际回调{high_evaluations}步；请检查采样器包装")
-        x0 = x0_capture.get("value")
-        if x0 is None:
-            denoised_samples = output_samples
-        else:
-            if output_samples.is_nested and not x0.is_nested:
-                x0 = comfy.utils.unpack_latents(x0, [z.shape for z in output_samples.unbind()])
-                x0 = comfy.nested_tensor.NestedTensor(x0)
-            denoised_samples = high_model.model.process_latent_out(x0.cpu())
+        denoised_samples = high_result['_denoised_samples']
         output = {"samples": output_samples.to(device=mm.intermediate_device(), dtype=mm.intermediate_dtype()),
                   "frame_count": total, "fps": 24.0}
         denoised_output = {"samples": denoised_samples, "frame_count": total, "fps": 24.0}
         final_video = output_samples.tensors[0]
         images = decode_video(vae, final_video)[:total].clone()
         audio = vae_decode_audio(audio_vae, {"samples": output_samples, "frame_count": total, "fps": 24.0})
-        reports.append(f"global_transition elapsed={time.perf_counter() - transition_started:.2f}s; "
+        reports.append(f"global_highres_cache_hit={int(high_hit)}; global_transition elapsed={time.perf_counter() - transition_started:.2f}s; "
                        f"global_highres_steps={high_steps} elapsed={time.perf_counter() - high_started:.2f}s")
         reports.append(f"SelfLift staged schedule: lowres_steps={transition_step} per segment; "
                        f"joined once; highres_steps={high_steps} for full timeline; "

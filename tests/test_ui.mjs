@@ -139,3 +139,31 @@ assert.equal(migratedNode.widgets.find(w=>w.name==='lowres_scale').value,0.5);
 assert.equal(migratedNode.widgets.find(w=>w.name==='upscaler_model').value,
     'minimax_h3_latent_upscaler_3d_fp16.safetensors');
 console.log('SelfLift widget checks passed: current layout stays positional; legacy prompt-first layout migrates by names.');
+
+// Current LiteGraph compacts widgets with serialize=false (including a linked
+// prompt). They must never shift advanced values when the UI is rearranged.
+const compactNode=new LayoutNode();
+const compactCanonical=compactNode.widgets.map(w=>w.name);
+compactNode.widgets.find(w=>w.name==='prompt').serialize=false;
+compactNode.widgets.splice(2,0,{name:'选择缓存文件夹…',type:'button',value:null,serialize:false,options:{serialize:false}});
+arrangeSecondPassWidgets(compactNode);
+const compactInfo={widgets_values:compactNode.widgets.filter(w=>w.serialize!==false).map(w=>w.value)};
+compactNode.onSerialize(compactInfo);
+assert.deepEqual(compactInfo.widgets_values,compactCanonical.filter(n=>n!=='prompt').map(n=>compactCanonical.indexOf(n)));
+assert.equal(compactInfo.widgets_values_named.upscale_factor,4);
+assert.ok(!Object.hasOwn(compactInfo.widgets_values_named,'选择缓存文件夹…'));
+// Even a broken positional array from a previous save is recoverable when
+// the standard frontend named snapshot is intact.
+compactInfo.widgets_values=compactInfo.widgets_values.map(()=>-999);
+compactNode.configure(compactInfo);
+assert.equal(compactNode.widgets.find(w=>w.name==='upscale_factor').value,4);
+assert.equal(compactNode.widgets.find(w=>w.name==='upscaler_model').value,3);
+assert.equal(compactNode.widgets.filter(w=>w.type==='button').length,1);
+assert.equal(compactNode.widgets.filter(w=>w.name==='prompt').length,1);
+const propertyOnly=structuredClone(compactInfo);
+delete propertyOnly.widgets_values_named;
+propertyOnly.widgets_values=propertyOnly.properties.solarL_widget_order.map(n=>compactCanonical.indexOf(n));
+compactNode.configure(propertyOnly);
+assert.equal(compactNode.widgets.find(w=>w.name==='upscale_factor').value,4);
+assert.equal(compactNode.widgets.filter(w=>w.name==='prompt').length,1);
+console.log('PASS: compact widget serialization, linked prompt, buttons and named recovery');

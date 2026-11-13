@@ -75,7 +75,10 @@ const selfLiftWidgets = ['enable_second_pass','upscaler_model','upscale_mode','u
 export function arrangeSecondPassWidgets(node) {
     if (!node.widgets?.some(w => w.name === 'prompt')) return;
     // Retain the backend's positional order for old workflow files.
-    if (!node._solarLCanonicalWidgets) node._solarLCanonicalWidgets = [...node.widgets];
+    if (!node._solarLCanonicalWidgets) {
+        node._solarLCanonicalWidgets = node.widgets.filter(w => w.type !== 'button');
+        node._solarLWidgetDefaults = new Map(node._solarLCanonicalWidgets.map(w => [w.name,w.value]));
+    }
     const names = node.widgets.some(w=>w.name==='transition_step') ? selfLiftWidgets : secondPassWidgets;
     const second = names.map(name => node.widgets.find(w => w.name === name)).filter(Boolean);
     const rest = node.widgets.filter(w => !second.includes(w));
@@ -138,8 +141,13 @@ app.registerExtension({
         if (!['MiniMaxH3LongVideoSampler-solarL','MiniMaxH3SelfLiftLongVideoSampler-solarL'].includes(nodeData.name)) return;
         const configure = nodeType.prototype.configure;
         nodeType.prototype.configure = function(...args) {
+            const stored = args[0];
+            const order = stored?.properties?.solarL_widget_order;
+            const named = stored?.widgets_values_named ?? (Array.isArray(order) && Array.isArray(stored?.widgets_values)
+                ? Object.fromEntries(order.map((name,i)=>[name,stored.widgets_values[i]])) : undefined);
             if (this._solarLCanonicalWidgets) {
-                this.widgets.splice(0,this.widgets.length,...this._solarLCanonicalWidgets);
+                const extras = this.widgets.filter(w => !this._solarLCanonicalWidgets.includes(w));
+                this.widgets.splice(0,this.widgets.length,...this._solarLCanonicalWidgets,...extras);
             }
             const savedValues = args[0]?.widgets_values;
             const isLegacySelfLiftLayout = nodeData.name === 'MiniMaxH3SelfLiftLongVideoSampler-solarL'
@@ -157,6 +165,16 @@ app.registerExtension({
                 args[0] = {...args[0], widgets_values:this.widgets.map(w=>previous.has(w.name) ? previous.get(w.name) : w.value)};
             }
             const result = configure?.apply(this,args);
+            // New ComfyUI compacts nonserialized widgets. Named values are the
+            // stable interface when widgets are linked, added or rearranged.
+            if (named && typeof named === 'object' && !Array.isArray(named)) {
+                for (const widget of this.widgets ?? []) {
+                    if (widget.type === 'button') continue;
+                    const key = widget.name === 'cfg' && !Object.hasOwn(named,'cfg') ? 'cfg_1' : widget.name;
+                    if (Object.hasOwn(named,key)) widget.value = named[key];
+                    else if (this._solarLWidgetDefaults?.has(widget.name)) widget.value = this._solarLWidgetDefaults.get(widget.name);
+                }
+            }
             arrangeSecondPassWidgets(this);
             return result;
         };
@@ -165,7 +183,13 @@ app.registerExtension({
             const result = serialize?.call(this,info,...args);
             if (Array.isArray(info.widgets_values) && this._solarLCanonicalWidgets) {
                 const values = [...info.widgets_values];
-                info.widgets_values = this._solarLCanonicalWidgets.map(widget => values[this.widgets.indexOf(widget)]);
+                const saved = this.widgets.filter(w => w.serialize !== false && w.options?.serialize !== false);
+                const named = info.widgets_values_named ?? Object.fromEntries(saved.map((w,i)=>[w.name,values[i]]));
+                const ordered = this._solarLCanonicalWidgets.filter(w => saved.includes(w));
+                info.widgets_values = ordered.map(widget => named[widget.name]);
+                info.widgets_values_named = Object.fromEntries(saved.map(w => [w.name,named[w.name]]));
+                info.properties ||= {};
+                info.properties.solarL_widget_order = ordered.map(w => w.name);
             }
             return result;
         };

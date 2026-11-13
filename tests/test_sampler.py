@@ -50,37 +50,13 @@ class Motion:
 
 
 class Tests(unittest.TestCase):
-    def test_selflift_adapter_uses_native_engine(self):
-        calls=[]
-        class Engine:
-            def sample(self,**kwargs):
-                calls.append(kwargs)
-                return (kwargs['latent_image'],)
-        def loop(**kwargs):
-            self.assertTrue(kwargs['enable_second_pass'])
-            self.assertNotIn('_first_pass_sampler',kwargs)
-            result=kwargs['_whole_video_refiner']('model',[],[],
-                {'samples':Nested((torch.zeros(1,24,62,4,4),torch.ones(1,32,2,348)))},
-                'euler',kwargs['sigmas_2'],123,1.0,{'mode':'scale by multiplier','scale':1.5})
-            self.assertEqual(result['samples'].tensors[0].shape,(1,24,62,6,6))
-            return (1,2,3,4,5,'report',7,8)
-        params=dict(model='model',positive=[],latent={},vae='vae',audio_vae='audio',
-            sampler_1='euler',sigmas_1=torch.tensor([1.,.8,.6,.4,.3,.2,.1,.05,0.]),
-            sampler_2='euler',sigmas_2=torch.tensor([.2,.1,0.]),
-            seed=0,cfg_1=1.,target_frames=194,segment_frames=124,overlap_frames=22,
-            continuation_mode='official_image_guide',upscaler_model='upscaler',
-            highres_tiling=True,model_hires='hires')
-        nested_module=types.ModuleType('comfy.nested_tensor');nested_module.NestedTensor=Nested
-        with patch.object(sl,'selflift_class',return_value=Engine),patch.object(s.SolarLH3LongVideoSampler,'run',side_effect=loop),patch.dict(sys.modules,{'comfy.nested_tensor':nested_module}):
-            out=sl.SolarLH3SelfLiftLongVideoSampler().run(**params)
-            self.assertEqual(len(out),7)
-            self.assertIn('whole-video',out[5])
-            self.assertEqual(calls[0]['transition_step'],1)
-            self.assertAlmostEqual(calls[0]['lowres_scale'],2/3)
-            self.assertEqual(calls[0]['model_hires'],'hires')
-            self.assertTrue(calls[0]['highres_tiling'])
-            with self.assertRaisesRegex(ValueError,'低分辨率步数'):
-                sl.SolarLH3SelfLiftLongVideoSampler().run(**params,transition_step=2)
+    def test_selflift_current_interface(self):
+        import inspect
+        signature = inspect.signature(sl.SolarLH3SelfLiftLongVideoSampler.run)
+        for key in ('sampler', 'sigmas', 'cfg', 'segment_plan', 'cache_directory'):
+            self.assertIn(key, signature.parameters)
+        for key in ('sampler_1', 'sigmas_1', 'cfg_1'):
+            self.assertNotIn(key, signature.parameters)
 
     def test_upscale_modes(self):
         self.assertEqual(s.upscale_mode_options('scale by multiplier',1.5,1280,704,1),
@@ -247,6 +223,17 @@ class Tests(unittest.TestCase):
         with self.assertRaises(ValueError): plan_segments(200,123,22)
         with self.assertRaises(ValueError): plan_segments(200,124,0)
 
+    def test_full_frame_plan(self):
+        for total in (1, 22, 124, 194, 227, 1000):
+            for overlap in (5, 22, 39, 56, 0, 999):
+                self.assertEqual(plan_segments(total, 0, overlap), [(0, 0)])
+                length = segment_length(total, 0, 0)
+                self.assertGreaterEqual(length, max(22, total))
+                self.assertEqual(length % 17, 5)
+                self.assertLess(length - max(22, total), 17)
+        with self.assertRaises(ValueError): plan_segments(0, 0, 22)
+        with self.assertRaises(ValueError): plan_segments(194, -1, 22)
+
     def test_sigmas(self):
         validate_sigmas(torch.tensor([.4,.2,0]),True)
         for v in [[1,.5,0],[.4,.5,0],[.4,.2,.1],[float('nan'),0]]:
@@ -259,7 +246,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(out['waveform'].shape[-1],5000)
         self.assertEqual(out['waveform'][...,-1].sum(),0)
 
-    def run_fake(self, second, motion=False, source=False, device='cuda',precision='fp16',many_refs=False,standalone_only=False,tile_count=0,tile_overlap=128,encoded=None,whole_selflift=False):
+    def run_fake(self, second, motion=False, source=False, device='cuda',precision='fp16',many_refs=False,standalone_only=False,tile_count=0,tile_overlap=128,encoded=None,whole_selflift=False,full_frame=False,cache_directory='',explicit_plan=False):
         events = []
         modules = {}
         for name in ['comfy','comfy.nested_tensor','comfy.model_management','comfy_extras','comfy_extras.nodes_minimax_h3','comfy_extras.nodes_audio','node_helpers']:
@@ -294,7 +281,7 @@ class Tests(unittest.TestCase):
                 self.assertEqual(bool(cond[0][1].get('minimax_refs')),encoded=='reuse_upstream')
             if mask is not None:
                 self.assertEqual(mask.tensors[1].count_nonzero(),0)
-                self.assertEqual([c[0] for c in calls], [42,43,44,1000042])
+                self.assertEqual([c[0] for c in calls], [42,1000042] if full_frame else [42,43,44,1000042])
                 z = latent['samples'].tensors[0]
                 self.assertEqual(z.shape[2],72)  # 243 aligned frames, no duplicated overlap
                 self.assertTrue(torch.equal(z[0,0,:,0,0],torch.arange(72.)))
@@ -319,6 +306,12 @@ class Tests(unittest.TestCase):
             sampler_2=object(),sigmas_2=torch.tensor([.3,0]))
         params.update(upscale_device=device,upscale_precision=precision)
         params.update(tile_count=tile_count,tile_overlap=tile_overlap)
+        if explicit_plan:
+            params['segment_plan'] = {'version':1, 'overlap_frames':22,
+                                     'segments':[{'frames':124}, {'frames':102}, {'frames':1}]}
+        params['cache_directory'] = cache_directory
+        if full_frame:
+            params.update(segment_frames=0, overlap_frames=56)
         if source:
             params.update(source_video=torch.zeros(227,32,32,3),clip=object(),prompt='motion')
         standalone={'waveform':torch.ones(1,2,1000),'sample_rate':24000}
@@ -360,13 +353,16 @@ class Tests(unittest.TestCase):
                     s.SolarLH3LongVideoSampler().run(**params)
                 return
             out = s.SolarLH3LongVideoSampler().run(**params)
+            if cache_directory:
+                out = s.SolarLH3LongVideoSampler().run(**params)
+                self.assertIn('cache_hit=1', out[5])
         self.assertEqual(out[0].shape,(227,64 if second else 32,64 if second else 32,3))
         self.assertEqual(out[1]['waveform'].shape[-1],227000)
         self.assertEqual(out[3],227)
         self.assertEqual(out[4]['samples'].tensors[0].shape[-1],2)
-        self.assertEqual(len(calls),4 if second else 3)
-        self.assertEqual(out[4]['samples'].tensors[0].shape[2],12)  # 39-frame final run
-        self.assertEqual(len(decode_calls), 1 if second and motion else 3)
+        self.assertEqual(len(calls), (2 if second else 1) if full_frame else (4 if second else 3))
+        self.assertEqual(out[4]['samples'].tensors[0].shape[2],72 if full_frame else 12)
+        self.assertEqual(len(decode_calls), (1 if full_frame or (second and motion) else 3) * (2 if cache_directory else 1))
         self.assertEqual(len(out),8)
         self.assertEqual(s.SolarLH3LongVideoSampler.RETURN_NAMES[-2:],('output','denoised_output'))
         self.assertEqual(out[6]['frame_count'],227)
@@ -378,10 +374,63 @@ class Tests(unittest.TestCase):
         expected_audio=0 if second else 3
         self.assertTrue(torch.all(out[7]['samples'].tensors[1]==expected_audio))
         if source and second:
-            self.assertEqual(events,[('reference',124),('reference',124),('reference',39),
+            self.assertEqual(events,[*([('reference',243)] if full_frame else [('reference',124),('reference',124),('reference',39)]),
                                      *([('reference',243),('whole_selflift',72)] if whole_selflift else [('upscale',72),('reference',243)])])
 
     def test_whole_selflift_after_join(self): self.run_fake(True,source=True,whole_selflift=True)
+
+    def test_full_frame_one_pass(self): self.run_fake(False, full_frame=True)
+    def test_full_frame_two_pass(self): self.run_fake(True, full_frame=True, source=True)
+    def test_full_frame_encoded_video(self): self.run_fake(False, full_frame=True, encoded='reuse_upstream')
+    def test_full_frame_motion_unused(self): self.run_fake(False, True, full_frame=True)
+
+    def test_selflift_full_frame_reaches_one_global_lift(self):
+        # Stop at the lift boundary: this regression concerns the temporal
+        # prefix, and must not load weights or run the GPU sampler.
+        names = ['comfy', 'comfy.nested_tensor', 'comfy.model_management',
+                 'comfy.sample', 'comfy.samplers', 'comfy.utils', 'latent_preview',
+                 'comfy_extras', 'comfy_extras.nodes_minimax_h3', 'comfy_extras.nodes_audio']
+        runtime = 'longvideo.vendor.selflift_runtime'
+        names += [runtime] + [runtime + '.' + name for name in
+                             ('nodes', 'selflift', 'h3_tiling', 'h3_upscaler')]
+        modules = {name: types.ModuleType(name) for name in names}
+        for name, module in modules.items():
+            parent, _, child = name.rpartition('.')
+            if parent in modules:
+                setattr(modules[parent], child, module)
+        modules['comfy.nested_tensor'].NestedTensor = Nested
+        modules['comfy_extras.nodes_audio'].vae_decode_audio = lambda *args: None
+        modules['comfy.model_management'].throw_exception_if_processing_interrupted = lambda: None
+        h3 = modules['comfy_extras.nodes_minimax_h3']
+        h3.FRAME_PER_TOKEN = (1, 4, 4, 4, 4)
+        h3._empty_av_latent = empty
+        h3.align_frame_count = lambda n: n + (5 - n) % 17
+        h3.video_latent_t = lambda n: ((n - 5) // 17) * 5 + 2
+        engine = modules[runtime + '.nodes']
+        engine._validate_schedule = lambda *args: None
+        engine._validate_sampling = lambda *args: None
+        engine._resize_keyframes = lambda cond, *args: cond
+        calls = []
+        def low_sample(model, cond, neg, latent, sampler, sigmas, seed, cfg):
+            calls.append((latent['samples'].tensors[0].shape, seed, sigmas.tolist()))
+            return dict(samples=latent['samples'], _denoised_samples=latent['samples'])
+        class LiftReached(Exception): pass
+        def lift(video, size, *args, **kwargs):
+            self.assertEqual(video.shape, (1, 24, 297, 2, 2))  # 1008 aligned frames
+            self.assertEqual(size, (4, 4))
+            raise LiftReached
+        modules[runtime + '.h3_upscaler'].learned_latent_lift = lift
+        model = types.SimpleNamespace(get_model_object=lambda name: object())
+        with patch.dict(sys.modules, modules), patch.object(sl, 'sample_once', low_sample), \
+             patch.object(sl, 'motion_class', side_effect=AssertionError('full-frame must not load continuation')):
+            with self.assertRaises(LiftReached):
+                sl.SolarLH3SelfLiftLongVideoSampler().run(
+                    model=model, positive=[[torch.zeros(1, 2, 3), {}]],
+                    latent=empty(64, 64, 124)[0], vae=VAE(), audio_vae=object(),
+                    sampler=object(), sigmas=torch.tensor([1., .5, 0.]), cfg=1.,
+                    seed=42, target_frames=1000, segment_frames=0, overlap_frames=56,
+                    continuation_mode='motion_context', upscaler_model='test', transition_step=1)
+        self.assertEqual(calls, [(torch.Size([1, 24, 297, 2, 2]), 42, [1., .5])])
 
     def test_official_one_pass(self): self.run_fake(False)
     def test_official_two_pass_tiled(self): self.run_fake(True)

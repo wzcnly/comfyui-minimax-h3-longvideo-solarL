@@ -4,7 +4,8 @@ import time
 
 import torch
 
-from .planning import plan_segments, segment_length, validate_sigmas
+from .planning import plan_segments, segment_length, validate_sigmas, parse_segment_schedule
+from .segment_cache import cached_sample, workflow_identity, exclusive_task
 
 LOG = logging.getLogger(__name__)
 REFERENCE_LIMITS = {'ref_image':9,'ref_video':3,'ref_video_audio':3,'ref_audio':3}
@@ -20,8 +21,8 @@ INPUT_TOOLTIPS = {
     "seed": "第一段一采种子，后续每段递增1；整片二采使用起始seed加1000000。",
     "cfg_1": "一采条件引导强度。应匹配所用模型和Turbo LoRA；可先沿用已经验证有效的设置。",
     "target_frames": "最终成片帧数。0优先采用Video 1（ref_video_0）实际帧数；未接视频则采用输入LATENT的帧数。不能超过参考视频长度。",
-    "segment_frames": "每段最大生成帧数，含重叠区。必须为17k+5且至少22帧；默认124。末段自动按剩余帧数向上对齐并缩短；每轮最多新增段长－重叠帧数。",
-    "overlap_frames": "相邻段共享的接续帧数，支持5、22、39、56，且必须小于段长。默认22；后续段输出会去掉这部分。",
+    "segment_frames": "0为全帧模式：按target_frames确定完整长度，一次采样，忽略重叠和接续设置。大于0为分段模式：必须为17k+5且至少22帧，默认124；末段自动向上对齐并缩短。两种模式最终均裁回目标帧数。",
+    "overlap_frames": "相邻段共享的接续帧数，支持5、22、39、56，且必须小于段长。默认22；后续段输出会去掉这部分。segment_frames=0时忽略。",
     "continuation_mode": "official_image_guide：上一段一采解码尾帧，再用官方AddGuide接续。motion_context：调用本插件内置Motion Context，直接使用上一段一采潜变量；不需要另装Apt_Preset。",
     "enable_second_pass": "关闭：只做普通分段一采。开启：先拼接全部一采视频潜变量，再整片3D放大并进行一次二采；音频保留一采。需sampler_2和sigmas_2。",
     "upscaler_model": "选择内置3D放大器使用的模型，支持子目录。权重放入models/latent_upscale_models；仅二采开启时加载，无需另装放大插件。",
@@ -262,7 +263,7 @@ class SolarLH3LongVideoSampler:
             "cfg_1": ("FLOAT", {"default":1.0,"min":0.0,"max":100.0}),
             "target_frames": ("INT", {"default":0,"min":0,"max":100000,
                                       "tooltip":"0优先使用原始source_video实际帧数，否则使用输入LATENT长度"}),
-            "segment_frames": ("INT", {"default":124,"min":22,"max":362,"step":17}),
+            "segment_frames": ("INT", {"default":124,"min":0,"max":362,"step":1}),
             "overlap_frames": ([22,5,39,56],),
             "continuation_mode": (["official_image_guide","motion_context"],),
             "enable_second_pass": ("BOOLEAN", {"default":False,
@@ -295,14 +296,21 @@ class SolarLH3LongVideoSampler:
             for i in range(limit):
                 name = f'{prefix}_{i}'
                 schema['optional'].setdefault(name, ('IMAGE' if prefix in ('ref_image','ref_video') else 'AUDIO',))
+        schema['optional']['segment_plan'] = ('SOLARL_H3_SEGMENT_PLAN',)
+        schema['optional']['cache_directory'] = ('STRING', {'default': '', 'tooltip': '留空关闭。每任务独立目录；正常ComfyUI执行核对上游工作流及模型文件后支持跨重启恢复；程序直接调用未提供工作流时仅会话内复用。'})
+        schema['optional']['second_pass_mode'] = (['full_then_refine', 'split_sigmas'], {'default':'full_then_refine', 'tooltip':'full_then_refine完整一采后增强；split_sigmas全帧high/low两阶段，一采用x0放大，同种子继续音视频二采。'})
+        schema['hidden'] = {'cache_prompt': 'PROMPT', 'cache_node_id': 'UNIQUE_ID'}
         for group in schema.values():
             for name, definition in group.items():
+                if isinstance(definition, str):
+                    continue
                 options = dict(definition[1]) if len(definition) > 1 else {}
-                options["tooltip"] = INPUT_TOOLTIPS[name]
+                options["tooltip"] = INPUT_TOOLTIPS.get(name, options.get('tooltip', '可选分段计划；连接后使用计划帧数、重叠和提示词。'))
                 group[name] = (definition[0], options)
         return schema
 
     @torch.inference_mode()
+    @exclusive_task
     def run(self, model, positive, latent, vae, audio_vae, sampler_1, sigmas_1,
             seed, cfg_1, target_frames, segment_frames, overlap_frames,
             continuation_mode, enable_second_pass, upscaler_model, upscale_factor,
@@ -311,7 +319,8 @@ class SolarLH3LongVideoSampler:
             ref_image_0=None, ref_image_1=None, ref_image_2=None, ref_image_3=None,
             upscale_device="cuda", upscale_precision="fp16", upscale_mode="scale by multiplier",
             upscale_width=1280, upscale_height=704, upscale_megapixels=1.0,
-            tile_count=0, tile_overlap=128, _whole_video_refiner=None, **extra_references):
+            tile_count=0, tile_overlap=128, _whole_video_refiner=None,
+            _guide_window_frames=None, _use_input_window=False, segment_plan=None, cache_directory='', cache_prompt=None, cache_node_id=None, second_pass_mode='full_then_refine', **extra_references):
         from comfy_extras import nodes_minimax_h3 as h3
         from comfy_extras.nodes_audio import vae_decode_audio
         import comfy.nested_tensor
@@ -319,7 +328,19 @@ class SolarLH3LongVideoSampler:
         import node_helpers
         if continuation_mode not in ('official_image_guide','motion_context'):
             raise ValueError("未知接续模式")
-        validate_sigmas(sigmas_1)
+        if second_pass_mode not in ('full_then_refine', 'split_sigmas'):
+            raise ValueError('未知二采模式')
+        split = second_pass_mode == 'split_sigmas'
+        if split:
+            if not enable_second_pass or segment_frames != 0 or segment_plan is not None or _whole_video_refiner or _use_input_window:
+                raise ValueError('Sigma分段二采需开启二采、segment_frames=0且不接分段计划或局部编辑窗口')
+            if sigmas_2 is None or sigmas_1.ndim != 1 or len(sigmas_1)<2 or sigmas_2.ndim != 1 or len(sigmas_2)<2:
+                raise ValueError('请将SplitSigmas的high/low分别接sigmas_1/sigmas_2')
+            if float(sigmas_1[-1])<=0 or not torch.isclose(sigmas_1[-1].cpu(),sigmas_2[0].cpu()):
+                raise ValueError('high/low必须共享同一个非零Sigma分界')
+            validate_sigmas(torch.cat((sigmas_1[:-1].cpu(),sigmas_2.cpu())))
+        else:
+            validate_sigmas(sigmas_1)
         streams = getattr(latent.get('samples'), 'tensors', None)
         if streams is None or len(streams)!=2 or streams[0].ndim!=5 or streams[0].shape[1]!=24:
             raise ValueError("请连接官方H3 Reference to Video的AV LATENT")
@@ -331,9 +352,35 @@ class SolarLH3LongVideoSampler:
         rebuild = source_video is not None or bool(reference_audio) or (bool(pictures) and clip is not None and bool(prompt.strip()))
         total = target_frames or (len(source_video) if source_video is not None else
                                  sum(h3.FRAME_PER_TOKEN[k%5] for k in range(streams[0].shape[2])))
-        plan = plan_segments(total, segment_frames, int(overlap_frames))
+        schedule = None
+        if segment_plan is not None:
+            if segment_plan.get('version') != 1:
+                raise ValueError('不兼容的分段计划')
+            overlap_frames = int(segment_plan['overlap_frames'])
+            schedule = parse_segment_schedule(segment_plan['segments'], overlap_frames, segment_plan.get('default_prompt', ''))
+            total = sum(row['frames'] for row in schedule)
+            cursor = 0
+            plan = []
+            for index, row in enumerate(schedule):
+                trim = overlap_frames if index else 0
+                plan.append((cursor-trim, trim))
+                cursor += row['frames']
+            if any(row['prompt'] for row in schedule):
+                if clip is None or not all(row['prompt'].strip() for row in schedule):
+                    raise ValueError('逐段提示词需要CLIP和每段非空提示词（可用统一提示词继承）')
+                prompt = segment_plan.get('default_prompt', '') or schedule[0]['prompt']
+                rebuild = True
+        else:
+            plan = plan_segments(total, segment_frames, int(overlap_frames))
         refs = positive[0][1].get('minimax_refs', [])
-        if any(d.get('minimax_keyframes') for _,d in positive):
+        if _guide_window_frames is not None:
+            if (segment_frames != 0 or rebuild or enable_second_pass
+                    or total != _guide_window_frames
+                    or total != sum(h3.FRAME_PER_TOKEN[k%5] for k in range(streams[0].shape[2]))):
+                raise ValueError("局部Guide只支持匹配LATENT长度的全帧一采，不能重建参考或开启二采")
+        if _use_input_window and _guide_window_frames is None:
+            raise ValueError("输入窗口潜变量仅供局部编辑使用")
+        if _guide_window_frames is None and any(d.get('minimax_keyframes') for _,d in positive):
             raise ValueError("请使用干净的ReferenceToVideo条件；外部首尾Guide没有全片时间映射，不能直接复用到每段")
         if len(plan)>1 and any(r.get('kind') in ('video','video_audio','audio') for r in refs) and not rebuild:
             raise ValueError("长视频参考不能从已编码CONDITIONING准确还原；请额外接ref_video_0、clip、prompt和原始参考图片")
@@ -374,20 +421,29 @@ class SolarLH3LongVideoSampler:
         denoised_video_parts, denoised_audio_parts = [], []
         sample_rate = None
         width,height = streams[0].shape[-1]*16, streams[0].shape[-2]*16
+        cache_identity = workflow_identity(cache_prompt, cache_node_id,
+            ['model', 'sampler_1', 'vae', 'audio_vae', 'clip', 'positive', 'negative']) if cache_directory else None
         for index,(start,trim) in enumerate(plan):
             mm.throw_exception_if_processing_interrupted()
             tick = time.perf_counter()
-            length = segment_length(total, start, segment_frames)
+            if schedule is None:
+                length = segment_length(total, start, segment_frames)
+                take_planned = None
+            else:
+                take_planned = schedule[index]['frames']
+                length = h3.align_frame_count(max(22, take_planned + trim))
             LOG.info("[solarL H3] first pass %d/%d start=%d generated=%d trim=%d",index+1,len(plan),start,length,trim)
             cond = positive
             if rebuild:
                 videos = {name:slice_images(frames,start,length) for name,frames in reference_videos.items()}
                 audios = {name:slice_audio(sound,start,length) for name,sound in reference_video_audio.items()}
                 cond,current = h3.MiniMaxH3ReferenceToVideo.execute(
-                    clip=clip,prompt=prompt,width=width,height=height,length=length,
+                    clip=clip,prompt=(schedule[index]['prompt'] if schedule is not None and schedule[index]['prompt'] else prompt),width=width,height=height,length=length,
                     ref_image_size='max',vae=reference_vae,audio_vae=audio_vae,ref_images=pictures,
                     ref_videos=videos,ref_video_audios=audios,ref_audios=reference_audio)[:2]
                 del videos, audios
+            elif _use_input_window:
+                current = latent
             else:
                 current,_ = h3._empty_av_latent(width,height,length)
             if previous is not None:
@@ -404,11 +460,24 @@ class SolarLH3LongVideoSampler:
                 for _,d in neg:
                     if isinstance(d.get('pooled_output'),torch.Tensor):
                         d['pooled_output'] = torch.zeros_like(d['pooled_output'])
-            first = sample_once(model,cond,neg,current,sampler_1,sigmas_1,(seed+index)%2**64,cfg_1)
+            if _use_input_window:
+                first = sample_once(model,cond,neg,current,sampler_1,sigmas_1,(seed+index)%2**64,cfg_1,
+                                    mask=current.get('noise_mask'))
+                cache_hit = False
+            else:
+                first, cache_hit = cached_sample(cache_directory, sample_once, model=model,
+                    cond=cond, negative=neg, latent=current, sampler=sampler_1, sigmas=sigmas_1,
+                    seed=(seed+index)%2**64, cfg=cfg_1, stage='ordinary-v2', identity=cache_identity, index=index,
+                    details={'start':start, 'trim':trim, 'length':length, 'prompt':schedule[index]['prompt'] if schedule else prompt,
+                             'lineage':schedule[:index+1] if schedule else plan[:index+1]})
             sampled = time.perf_counter()
             previous = {k:v for k,v in first.items() if k != '_denoised_samples'}
             video,audio = first['samples'].tensors
             denoised_video,denoised_audio = first.get('_denoised_samples',first['samples']).tensors
+            if split:
+                if '_denoised_samples' not in first:
+                    raise RuntimeError('Sigma分段一采未返回边界x0，不能使用带噪output代替')
+                video, audio = denoised_video, denoised_audio
             first_decoded = None
             if motion is None and index + 1 < len(plan):
                 first_decoded = decode_video(vae, video)
@@ -417,7 +486,7 @@ class SolarLH3LongVideoSampler:
                     # Only the cloned tail is needed; do not keep low-res RGB during refinement.
                     first_decoded = None
             refined_at = time.perf_counter()
-            take = min(length-trim,total-(start+trim))
+            take = min(length-trim,total-(start+trim)) if take_planned is None else take_planned
             trim_tokens = h3.video_latent_t(trim) if trim else 0
             video_latent_parts.append(video[:,:,trim_tokens:].cpu().clone())
             audio_start = round((start+trim)*40/24)
@@ -439,7 +508,7 @@ class SolarLH3LongVideoSampler:
                 raise ValueError("各段音频采样率不一致")
             sample_rate = clipped['sample_rate']
             audio_parts.append(clipped['waveform'].cpu().clone())
-            reports.append(f"segment {index+1}/{len(plan)} start={start} generated={length} trim={trim} output={take} "
+            reports.append(f"segment {index+1}/{len(plan)} cache_hit={int(cache_hit)} start={start} generated={length} trim={trim} output={take} "
                            f"prepare={prepared-tick:.2f}s sample1={sampled-prepared:.2f}s "
                            f"post_sample1={refined_at-sampled:.2f}s decode_audio={time.perf_counter()-refined_at:.2f}s "
                            f"image_cache_hits={reference_vae.hits} elapsed={time.perf_counter()-tick:.2f}s")
@@ -477,6 +546,8 @@ class SolarLH3LongVideoSampler:
                         d['pooled_output'] = torch.zeros_like(d['pooled_output'])
             high = {'samples':comfy.nested_tensor.NestedTensor((output_video,audio))}
             mask = comfy.nested_tensor.NestedTensor((torch.ones_like(output_video),torch.zeros_like(audio)))
+            if split:
+                mask = None
             second_model = model_2 or model
             if tiled:
                 second_model = tiled(second_model,[tuple(output_video.shape),tuple(audio.shape)],
@@ -487,8 +558,13 @@ class SolarLH3LongVideoSampler:
                 refined = _whole_video_refiner(second_model,high_cond,high_neg,high,sampler_2,sigmas_2,
                                               (seed+1000000)%2**64,cfg_2,upscale_options)
             else:
-                refined = sample_once(second_model,high_cond,high_neg,high,sampler_2,sigmas_2,
-                                      (seed+1000000)%2**64,cfg_2,mask)
+                refine_identity = workflow_identity(cache_prompt, cache_node_id,
+                    ['model', 'model_2', 'sampler_2', 'vae', 'audio_vae', 'clip', 'positive', 'negative']) if cache_directory else None
+                refined, refine_hit = cached_sample(cache_directory, sample_once, model=second_model,
+                    cond=high_cond, negative=high_neg, latent=high, sampler=sampler_2, sigmas=sigmas_2,
+                    seed=seed if split else (seed+1000000)%2**64, cfg=cfg_2, mask=mask,
+                    stage='split-sigma-refine-v1' if split else 'ordinary-refine-v2', identity=refine_identity)
+                reports.append(f'whole_video_second_pass cache_hit={int(refine_hit)}')
             tile_plan = getattr(second_model,'_solarL_tiling_plan',None) if tiled else None
             if tile_plan and 'max_tile_pixels' in tile_plan:
                 tw,th = tile_plan['max_tile_pixels']
@@ -497,9 +573,17 @@ class SolarLH3LongVideoSampler:
                                f"max_tile_mp={tile_plan['max_tile_mp']:.3f}")
             final_video = refined['samples'].tensors[0].cpu()
             predicted_video = refined.get('_denoised_samples',refined['samples']).tensors[0].cpu()
+            predicted_audio = audio
+            if split:
+                audio = refined['samples'].tensors[1].cpu()
+                predicted_audio = refined.get('_denoised_samples',refined['samples']).tensors[1].cpu()
+                final_sound = slice_audio(vae_decode_audio(audio_vae, refined),0,total)
+                sample_rate = final_sound['sample_rate']
+                audio_parts = [final_sound['waveform'].cpu()]
+                reports.append('second_pass_mode=split_sigmas; 一采x0放大，同seed补采，音频参与二采')
             # Both final latent outputs retain the merged first-pass audio.
             output = {'samples':comfy.nested_tensor.NestedTensor((final_video,audio)), 'frame_count':total, 'fps':24.0}
-            denoised_output = {'samples':comfy.nested_tensor.NestedTensor((predicted_video,audio)), 'frame_count':total, 'fps':24.0}
+            denoised_output = {'samples':comfy.nested_tensor.NestedTensor((predicted_video,predicted_audio)), 'frame_count':total, 'fps':24.0}
             images = decode_video(vae,refined['samples'].tensors[0])[:total].clone()
             if len(images)!=total:
                 raise ValueError("完整二采解码帧数不足")
