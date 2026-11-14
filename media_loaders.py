@@ -9,6 +9,18 @@ import torch
 
 RATIOS=['1:1','4:3','3:4','3:2','2:3','16:9','9:16','21:9','9:21']
 
+def is_none(value):
+    return value is None or value == 'none'
+
+
+def media_fingerprint(value):
+    if is_none(value):return 'none'
+    import folder_paths,hashlib
+    digest=hashlib.sha256()
+    with open(folder_paths.get_annotated_filepath(value),'rb') as stream:
+        for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
+    return digest.hexdigest()
+
 def long_edge_size(w,h,limit,upscale=False):
     if not limit: return w,h
     limit=max(32,int(limit)//32*32)
@@ -42,12 +54,13 @@ class SolarLReferenceImageLoad:
         import folder_paths
         files=folder_paths.filter_files_content_types(os.listdir(folder_paths.get_input_directory()),['image'])
         return {'required':{
-            'image':(sorted(files),{'image_upload':True}),
+            'image':(['none']+sorted(files),{'image_upload':True}),
             '最长边':('FLOAT',{'default':1280,'min':0,'max':8192,'step':32,'tooltip':'0保持原尺寸；0到10表示百万像素上限且不放大；大于10表示最长边像素，按32对齐。'}),
             '允许小图放大':('BOOLEAN',{'default':False,'tooltip':'开启允许按最长边放大小图；百万像素模式始终只缩小。'}),
             '调整比例':('BOOLEAN',{'default':False,'tooltip':'开启先按目标比例取最大居中裁剪，再限制尺寸。'}),
             '目标比例':(RATIOS,{'default':'16:9','tooltip':'居中裁剪比例，保留最大的原图面积。'})}}
     def load_and_scale(self,image,**kwargs):
+        if is_none(image):return None,None
         import folder_paths
         import numpy as np
         from PIL import Image,ImageOps
@@ -64,13 +77,12 @@ class SolarLReferenceImageLoad:
         return frames,mask
     @classmethod
     def VALIDATE_INPUTS(cls,image,**kwargs):
+        if is_none(image):return True
         import folder_paths
         return True if folder_paths.exists_annotated_filepath(image) else '图片文件不存在'
     @classmethod
     def IS_CHANGED(cls,image,**kwargs):
-        import folder_paths,hashlib
-        with open(folder_paths.get_annotated_filepath(image),'rb') as stream:
-            return hashlib.sha256(stream.read()).hexdigest()
+        return media_fingerprint(image)
 
 def vhs_provider():
     import nodes
@@ -98,7 +110,7 @@ def aligned_stream(stream,frames_rule=None):
     for _ in range(keep):yield buffer.popleft()
 
 class SolarLLoadVideoUpload:
-    CATEGORY='Video Helper Suite 🎥🅥🅗🅢'
+    CATEGORY='solarL/MiniMax H3'
     FUNCTION='load_video'
     RETURN_TYPES=('*','INT','AUDIO','VHS_VIDEOINFO')
     RETURN_NAMES=('IMAGE','frame_count','audio','video_info')
@@ -106,16 +118,21 @@ class SolarLLoadVideoUpload:
     def INPUT_TYPES(cls):
         base,_=vhs_provider();cls.RETURN_TYPES=base.RETURN_TYPES
         schema=copy.deepcopy(base.INPUT_TYPES())
+        options,*settings=schema['required']['video']
+        schema['required']['video']=(['none']+[v for v in options if v!='none'],*settings)
         schema['required'].update({
             'size_mode':(['custom','longest_edge'],{'default':'custom','tooltip':'custom使用VHS原有自定义宽高；longest_edge按最长边等比例缩小，尺寸按32对齐，不主动放大。'}),
             'max_long_edge':('INT',{'default':720,'min':0,'max':8192,'step':32,'tooltip':'最长边模式的像素上限；0保留原尺寸。自定义模式不使用此值。'}),
             'align_17n5':('BOOLEAN',{'default':False,'label_on':'17n＋5裁尾：开启','label_off':'17n＋5裁尾：关闭','tooltip':'开启只裁末尾，将最终帧长适配17n+5；不补帧。音频同步限制到裁尾后长度。Meta Batch按完整时间轴裁尾，各批次仍按VHS设置输出。H3参考应将force_rate设为24。'})})
         return schema
     @classmethod
-    def IS_CHANGED(cls,video,**kwargs):return vhs_provider()[0].IS_CHANGED(video,**kwargs)
+    def IS_CHANGED(cls,video,**kwargs):
+        return 'none' if is_none(video) else vhs_provider()[0].IS_CHANGED(video,**kwargs)
     @classmethod
-    def VALIDATE_INPUTS(cls,video,**kwargs):return vhs_provider()[0].VALIDATE_INPUTS(video)
+    def VALIDATE_INPUTS(cls,video,**kwargs):
+        return True if is_none(video) else vhs_provider()[0].VALIDATE_INPUTS(video)
     def load_video(self,size_mode='custom',max_long_edge=720,align_17n5=False,**kwargs):
+        if is_none(kwargs.get('video')):return None,0,None,None
         base,module=vhs_provider()
         if size_mode not in ('custom','longest_edge'):raise ValueError('未知视频尺寸模式')
         if size_mode=='longest_edge' and max_long_edge:
@@ -160,3 +177,42 @@ class SolarLLoadVideoUpload:
             elif audio is not None:
                 audio=dict(audio);audio['waveform']=audio['waveform'][...,:round(info['loaded_duration']*audio['sample_rate'])];result[2]=audio
         return tuple(result)
+
+
+class SolarLLoadAudioUpload:
+    CATEGORY='solarL/MiniMax H3'
+    FUNCTION='load_audio'
+    RETURN_TYPES=('AUDIO','FLOAT')
+    RETURN_NAMES=('audio','duration_seconds')
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        import folder_paths
+        files=folder_paths.filter_files_content_types(os.listdir(folder_paths.get_input_directory()),['audio','video'])
+        return {'required':{
+            'audio':(['none']+sorted(files),{'audio_upload':True}),
+            'start_seconds':('FLOAT',{'default':0,'min':0,'max':864000,'step':0.1,'tooltip':'从第几秒开始加载。'}),
+            'duration_seconds':('FLOAT',{'default':0,'min':0,'max':864000,'step':0.1,'tooltip':'加载时长（秒）；0加载从起点到结尾的全部音频。超过剩余长度时取到结尾。'})}}
+
+    @classmethod
+    def VALIDATE_INPUTS(cls,audio,**kwargs):
+        if is_none(audio):return True
+        import folder_paths
+        return True if folder_paths.exists_annotated_filepath(audio) else '音频文件不存在'
+
+    @classmethod
+    def IS_CHANGED(cls,audio,**kwargs):return media_fingerprint(audio)
+
+    def load_audio(self,audio,start_seconds=0,duration_seconds=0):
+        if is_none(audio):return None,0.0
+        if not all(math.isfinite(v) and v>=0 for v in (start_seconds,duration_seconds)):
+            raise ValueError('音频起点和加载时长必须是大于等于0的有限秒数')
+        import folder_paths
+        from comfy_extras.nodes_audio import load
+        waveform,sample_rate=load(folder_paths.get_annotated_filepath(audio))
+        start=round(start_seconds*sample_rate)
+        if start>=waveform.shape[-1]:raise ValueError('音频起点超出文件长度，或文件没有可读取的音频')
+        end=min(waveform.shape[-1],start+round(duration_seconds*sample_rate)) if duration_seconds else waveform.shape[-1]
+        if end<=start:raise ValueError('加载时长不足一个音频采样点，请增大加载时长')
+        waveform=waveform[...,start:end].contiguous().clone()
+        return {'waveform':waveform.unsqueeze(0),'sample_rate':sample_rate},waveform.shape[-1]/sample_rate

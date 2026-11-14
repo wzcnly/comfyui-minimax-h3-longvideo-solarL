@@ -4,7 +4,8 @@ from pathlib import Path
 parser=argparse.ArgumentParser();parser.add_argument('--comfy-root',required=True);args=parser.parse_args()
 sys.path.insert(0,args.comfy_root)
 import torch,nodes,cv2,numpy as np,server,folder_paths
-server.PromptServer.instance=types.SimpleNamespace(prompt_queue=None)
+server.PromptServer.instance=types.SimpleNamespace(
+    prompt_queue=None,routes=types.SimpleNamespace(post=lambda path:lambda handler:handler))
 from PIL import Image
 root=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('media_smoke',root/'__init__.py',submodule_search_locations=[str(root)])

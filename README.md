@@ -2,7 +2,9 @@
 
 MiniMax H3 长视频采样、分段计划、阶段缓存与实验性局部编辑节点包。
 
-当前版本：**v0.2.0**。下载见[Releases](https://github.com/wzcnly/comfyui-minimax-h3-longvideo-solarL/releases)。[v0.1.0](https://github.com/wzcnly/comfyui-minimax-h3-longvideo-solarL/releases/tag/v0.1.0)保留更新前的线上版本，便于回滚。详细变更见[CHANGELOG](CHANGELOG.md)。
+当前版本：**v0.2.1**。下载见[Releases](https://github.com/wzcnly/comfyui-minimax-h3-longvideo-solarL/releases)。历史版本继续保留，便于回滚。详细变更见[CHANGELOG](CHANGELOG.md)。
+
+v0.2.1新增可选择起点和时长的音频加载器，图片／视频／音频均支持none空值；修复音频节点无法添加到画布的问题，三个加载器统一归类到 `solarL/MiniMax H3`。
 
 ## 本版新增与入口
 
@@ -99,6 +101,8 @@ SelfLift版没有独立的输出放大模式或倍率。最终宽高由输入LAT
 
 支持上传／选择图片、EXIF方向、透明遮罩、最长边限制、小图放大开关和目标比例最大居中裁剪，输出IMAGE和MASK。
 
+图片选择 `none` 时输出真正的空值（IMAGE、MASK均为None），不加载文件，适合可选参考图输入。
+
 `最长边=0`保留尺寸；大于0且不超过10表示百万像素上限，只缩小；大于10表示最长边像素，按32对齐。开启调整比例时先裁剪，再限制尺寸。
 
 ## 视频上传载入
@@ -107,6 +111,8 @@ SelfLift版没有独立的输出放大模式或倍率。最终宽高由输入LAT
 
 保留上传／选择、帧率、自定义宽高、加载帧数上限、跳帧、抽帧、格式、Meta Batch、VAE，以及IMAGE／LATENT、frame_count、audio、video_info四个输出。
 
+视频选择 `none` 时画面、音频和video_info均输出None，frame_count输出0，不读取视频。
+
 - `size_mode=custom`：使用自定义宽高。
 - `size_mode=longest_edge`：按最长边等比例缩小、按32对齐，不主动放大；最长边0保留源尺寸。
 - `align_17n5`：默认关闭；开启只裁尾帧到17n＋5，不补帧，少于5帧报错，音频同步限制到输出时长。所选格式有其他帧长规则时同时满足两者。
@@ -114,6 +120,16 @@ SelfLift版没有独立的输出放大模式或倍率。最终宽高由输入LAT
 裁尾发生在VAE编码前；Meta Batch按完整时间轴裁尾，各批次仍按设置输出。H3参考视频建议将force_rate设为24。
 
 预览默认暂停，使用视频自带的播放／暂停、进度条和时间控件。手动播放后循环，直到暂停；更新预览或更换源视频后恢复暂停。
+
+## 音频上传载入
+
+节点：**加载音频（可选时长） - solarL**，输出标准AUDIO和实际加载时长（秒）。支持上传／选择音频，也可从输入目录中的视频提取音轨。
+
+- `audio=none`：输出None，时长为0。
+- `start_seconds`：开始位置，单位秒，默认0。
+- `duration_seconds`：加载时长，单位秒；0表示从开始位置取到结尾，超过剩余长度自动取到结尾。开始位置超出音频长度会提示错误。
+
+保留原始采样率和声道。当前使用ComfyUI自带解码器读取后裁剪，不减少长音频解码时的峰值内存。图片、视频、音频的none都需要接入支持可选输入的下游；必需素材的节点仍需要提供文件。
 
 ## 输出和测试
 

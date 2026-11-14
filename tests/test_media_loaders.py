@@ -6,6 +6,45 @@ from test_sampler import package
 from longvideo import media_loaders as m
 
 class MediaTests(unittest.TestCase):
+    def test_none_loaders_skip_file_access_and_vhs(self):
+        for value in ('none',None):
+            self.assertEqual(m.SolarLReferenceImageLoad().load_and_scale(value),(None,None))
+            self.assertEqual(m.SolarLLoadAudioUpload().load_audio(value),(None,0.0))
+            with patch.object(m,'vhs_provider',side_effect=AssertionError('must not load VHS')):
+                self.assertEqual(m.SolarLLoadVideoUpload().load_video(video=value),(None,0,None,None))
+                self.assertIs(m.SolarLLoadVideoUpload.VALIDATE_INPUTS(value),True)
+                self.assertEqual(m.SolarLLoadVideoUpload.IS_CHANGED(value),'none')
+            for loader in (m.SolarLReferenceImageLoad,m.SolarLLoadAudioUpload):
+                self.assertIs(loader.VALIDATE_INPUTS(value),True)
+                self.assertEqual(loader.IS_CHANGED(value),'none')
+
+    def test_none_choices_preserve_video_widget_order_and_provider_schema(self):
+        schema={'required':{'video':(['b.mp4'],{'video_upload':True}),'force_rate':('INT',{'default':24})}}
+        provider=types.SimpleNamespace(INPUT_TYPES=lambda:schema,RETURN_TYPES=('IMAGE','INT','AUDIO','VHS_VIDEOINFO'))
+        with patch.object(m,'vhs_provider',return_value=(provider,None)):
+            result=m.SolarLLoadVideoUpload.INPUT_TYPES()
+        self.assertEqual(result['required']['video'],(['none','b.mp4'],{'video_upload':True}))
+        self.assertEqual(list(result['required'])[:2],['video','force_rate'])
+        self.assertEqual(schema['required']['video'][0],['b.mp4'])
+
+    def test_audio_interval_and_remaining_duration(self):
+        import sys
+        waveform=torch.arange(40,dtype=torch.float32).reshape(2,20)
+        fake=types.ModuleType('comfy_extras.nodes_audio')
+        fake.load=lambda path:(waveform,10)
+        paths=types.SimpleNamespace(get_annotated_filepath=lambda value:value)
+        with patch.dict(sys.modules,{'comfy_extras.nodes_audio':fake,'folder_paths':paths}):
+            audio,duration=m.SolarLLoadAudioUpload().load_audio('test.wav',0.5,0.8)
+            self.assertEqual(audio['sample_rate'],10)
+            self.assertEqual(duration,0.8)
+            self.assertTrue(torch.equal(audio['waveform'],waveform[:,5:13].unsqueeze(0)))
+            audio,duration=m.SolarLLoadAudioUpload().load_audio('test.wav',1.5,0)
+            self.assertEqual(duration,0.5)
+            self.assertEqual(audio['waveform'].shape,(1,2,5))
+            self.assertEqual(m.SolarLLoadAudioUpload().load_audio('test.wav',1.5,99)[1],0.5)
+            for start,length in ((2,0),(-1,1),(0,float('nan')),(float('inf'),0),(0,0.001)):
+                with self.assertRaises(ValueError):m.SolarLLoadAudioUpload().load_audio('test.wav',start,length)
+
     def test_geometry(self):
         self.assertEqual(m.long_edge_size(1920,1080,720),(704,384))
         self.assertEqual(m.long_edge_size(1080,1920,720),(384,704))
